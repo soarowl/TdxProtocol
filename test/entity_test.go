@@ -50,7 +50,7 @@ var _ = Describe("TestSockListReq", func() {
 		chk(err)
 
 		parser := network.NewStockListParser(req, buffer)
-		result := parser.Parse()
+		_, result := parser.Parse()
 		fmt.Println(hex.EncodeToString(parser.Data))
 
 		fmt.Println("total:", parser.Total, " got:", len(result))
@@ -92,7 +92,7 @@ var _ = Describe("TestInfoExReq", func() {
 		chk(err)
 
 		parser := network.NewInfoExParser(req, buffer)
-		result := parser.Parse()
+		_, result := parser.Parse()
 		fmt.Println(hex.EncodeToString(parser.Data))
 
 		for k, l := range result {
@@ -127,7 +127,7 @@ var _ = Describe("TestInstantTransReq", func() {
 		chk(err)
 
 		parser := network.NewInstantTransParser(req, buffer)
-		result := parser.Parse()
+		_, result := parser.Parse()
 		//fmt.Println(hex.EncodeToString(parser.Data))
 
 		fmt.Println("record count: ", len(result))
@@ -162,7 +162,7 @@ var _ = Describe("TestHisTransReq", func() {
 		fmt.Println("time cost: ", time.Now().UnixNano() - start)
 
 		parser := network.NewHisTransParser(req, buffer)
-		result := parser.Parse()
+		_, result := parser.Parse()
 
 		fmt.Println("record count: ", len(result))
 		for _, t := range result {
@@ -196,7 +196,7 @@ var _ = Describe("TestPeriodDataReq", func() {
 		fmt.Println("time cost: ", time.Now().UnixNano() - start)
 
 		parser := network.NewPeriodDataParser(req, buffer)
-		result := parser.Parse()
+		_, result := parser.Parse()
 		fmt.Println(hex.EncodeToString(parser.Data))
 
 		fmt.Println("record count: ", len(result))

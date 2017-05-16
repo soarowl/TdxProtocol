@@ -248,17 +248,17 @@ func (this *RespParser) Parse() {
 	this.uncompressIf()
 }
 
-func (this *InstantTransParser) Parse() []*Transaction {
+func (this *InstantTransParser) Parse() (error, []*Transaction) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
-		panic(errors.New("incomplete data"))
+		return errors.New("incomplete data"), nil
 	}
 
 	if this.getSeqId() != this.Req.Header.SeqId {
-		panic(errors.New("bad seq id"))
+		return errors.New("bad seq id"), nil
 	}
 
 	if this.getCmd() != this.Req.Header.Cmd {
-		panic(errors.New("bad cmd"))
+		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
@@ -287,7 +287,7 @@ func (this *InstantTransParser) Parse() []*Transaction {
 		this.skipByte(1)
 		result = append(result, trans)
 	}
-	return result
+	return nil, result
 }
 
 func NewInstantTransParser(req *InstantTransReq, data []byte) *InstantTransParser {
@@ -299,17 +299,17 @@ func NewInstantTransParser(req *InstantTransReq, data []byte) *InstantTransParse
 	}
 }
 
-func (this *HisTransParser) Parse() []*Transaction {
+func (this *HisTransParser) Parse() (error, []*Transaction) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
-		panic(errors.New("incomplete data"))
+		return errors.New("incomplete data"), nil
 	}
 
 	if this.getSeqId() != this.Req.Header.SeqId {
-		panic(errors.New("bad seq id"))
+		return errors.New("bad seq id"), nil
 	}
 
 	if this.getCmd() != this.Req.Header.Cmd {
-		panic(errors.New("bad cmd"))
+		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
@@ -338,7 +338,7 @@ func (this *HisTransParser) Parse() []*Transaction {
 		trans.Count = uint32(this.parseData2())
 		result = append(result, trans)
 	}
-	return result
+	return nil, result
 }
 
 func NewHisTransParser(req *HisTransReq, data []byte) *HisTransParser {
@@ -350,17 +350,17 @@ func NewHisTransParser(req *HisTransReq, data []byte) *HisTransParser {
 	}
 }
 
-func (this *InfoExParser) Parse() map[string][]*InfoExItem {
+func (this *InfoExParser) Parse() (error, map[string][]*InfoExItem) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
-		panic(errors.New("incomplete data"))
+		return errors.New("incomplete data"), nil
 	}
 
 	if this.getSeqId() != this.Req.Header.SeqId {
-		panic(errors.New("bad seq id"))
+		return errors.New("bad seq id"), nil
 	}
 
 	if this.getCmd() != this.Req.Header.Cmd {
-		panic(errors.New("bad cmd"))
+		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
@@ -382,7 +382,7 @@ func (this *InfoExParser) Parse() map[string][]*InfoExItem {
 			stockCode1 := string(this.Data[this.Current:this.Current + STOCK_CODE_LEN])
 			this.skipByte(STOCK_CODE_LEN + 1)
 			if stockCode != stockCode1 {
-				panic(errors.New(fmt.Sprintf("bad stock code, stockCode: %s stockCode1: %s", stockCode, stockCode1)))
+				return errors.New(fmt.Sprintf("bad stock code, stockCode: %s stockCode1: %s", stockCode, stockCode1)), nil
 			}
 			date := this.getUint32()
 			tp := this.getByte()
@@ -402,7 +402,7 @@ func (this *InfoExParser) Parse() map[string][]*InfoExItem {
 			result[stockCode] = append(result[stockCode], obj)
 		}
 	}
-	return result
+	return nil, result
 }
 
 func NewInfoExParser(req *InfoExReq, data []byte) *InfoExParser {
@@ -436,17 +436,17 @@ func (this *StockListParser) searchStockCode() int {
 	panic(errors.New("no stock code found"))
 }
 
-func (this *StockListParser) Parse() map[string]*Bid {
+func (this *StockListParser) Parse() (error, map[string]*Bid) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
-		panic(errors.New("incomplete data"))
+		return errors.New("incomplete data"), nil
 	}
 
 	if this.getSeqId() != this.Req.Header.SeqId {
-		panic(errors.New("bad seq id"))
+		return errors.New("bad seq id"), nil
 	}
 
 	if this.getCmd() != this.Req.Header.Cmd {
-		panic(errors.New("bad cmd"))
+		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
@@ -515,7 +515,7 @@ func (this *StockListParser) Parse() map[string]*Bid {
 		}
 	}
 	this.Total = totalCount
-	return result
+	return nil, result
 }
 
 func NewPeriodDataParser(req *PeriodDataReq, data []byte) *PeriodDataParser {
@@ -527,17 +527,17 @@ func NewPeriodDataParser(req *PeriodDataReq, data []byte) *PeriodDataParser {
 	}
 }
 
-func (this *PeriodDataParser) Parse() []*Record {
+func (this *PeriodDataParser) Parse() (error, []*Record) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
-		panic(errors.New("incomplete data"))
+		return errors.New("incomplete data"), nil
 	}
 
 	if this.getSeqId() != this.Req.Header.SeqId {
-		panic(errors.New("bad seq id"))
+		return errors.New("bad seq id"), nil
 	}
 
 	if this.getCmd() != this.Req.Header.Cmd {
-		panic(errors.New("bad cmd"))
+		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
@@ -570,7 +570,7 @@ func (this *PeriodDataParser) Parse() []*Record {
 		priceBase = int(record.Close)
 	}
 
-	return result
+	return nil, result
 }
 
 func NewStockListParser(req *StockListReq, data []byte) *StockListParser {

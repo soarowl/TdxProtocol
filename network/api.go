@@ -93,9 +93,9 @@ func (this *API) GetStockList(block uint16, offset uint16, count uint16) (error,
 	}
 
 	parser := NewStockListParser(req, respData)
-	result := parser.Parse()
+	err, result := parser.Parse()
 
-	return nil, int(parser.Total), result
+	return err, int(parser.Total), result
 }
 
 func (this *API) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
@@ -112,9 +112,7 @@ func (this *API) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
 	}
 
 	parser := NewInfoExParser(req, respData)
-	result := parser.Parse()
-
-	return nil, result
+	return parser.Parse()
 }
 
 func (this *API) GetPeriodData(code string, period, offset, count uint16) (error, []*Record) {
@@ -128,9 +126,7 @@ func (this *API) GetPeriodData(code string, period, offset, count uint16) (error
 	}
 
 	parser := NewPeriodDataParser(req, respData)
-	result := parser.Parse()
-
-	return nil, result
+	return parser.Parse()
 }
 
 func (this *API) GetMinuteData(code string, offset, count uint16) (error, []*Record) {
