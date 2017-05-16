@@ -8,6 +8,7 @@ import (
 const (
 	CMD_INFO_EX = 0x000f
 	CMD_STOCK_LIST = 0x0524
+	CMD_PERIOD_DATA = 0x052d
 	CMD_INSTANT_TRANS = 0x0fc5
 	CMD_HIS_TRANS = 0x0fb5
 	CMD_HEART_BEAT = 0x0523
@@ -20,6 +21,11 @@ const (
 	BLOCK_SZ_B = 3
 	BLOCK_INDEX = 11
 	BLOCK_UNKNOWN = 99
+)
+
+const (
+	PERIOD_DAY = 0x0004
+	PERIOD_MINUTE = 0x0007
 )
 
 type Header struct {
@@ -66,6 +72,19 @@ type HisTransReq struct {
 	StockCode string
 	Offset uint16
 	Count uint16
+}
+
+type PeriodDataReq struct {
+	Header Header
+	Location uint16
+	StockCode string
+	Period uint16
+	Unknown1 uint16 		// Always be 1
+	Offset uint16
+	Count uint16
+	Unknown2 uint32			// 0
+	Unknown3 uint32			// 0
+	Unknown4 uint16			// 0
 }
 
 func MarketLocationFromCode(stockCode string) byte {
@@ -267,6 +286,50 @@ func NewHisTransReq(seqId uint32, date uint32, stockCode string, offset uint16, 
 		stockCode,
 		offset,
 		count,
+	}
+
+	req.Header.Len = req.Size()
+	req.Header.Len1 = req.Header.Len
+
+	return req
+}
+
+func (this *PeriodDataReq) Write(writer *bytes.Buffer) {
+	this.Header.Write(writer)
+	writeUInt16(writer, this.Location)
+	writer.Write([]byte(this.StockCode))
+	writeUInt16(writer, this.Period)
+	writeUInt16(writer, this.Unknown1)
+	writeUInt16(writer, this.Offset)
+	writeUInt16(writer, this.Count)
+	writeUInt32(writer, this.Unknown2)
+	writeUInt32(writer, this.Unknown3)
+	writeUInt16(writer, this.Unknown4)
+}
+
+func (this *PeriodDataReq) Size() uint16 {
+	return 28
+}
+
+func NewPeriodDataReq(seqId uint32, stockCode string, period uint16, offset uint16, count uint16) *PeriodDataReq {
+	req := &PeriodDataReq{
+		Header{
+			Zip: 0xc,
+			SeqId: seqId,
+			PacketType: 0x1,
+			Len: 0,
+			Len1: 0,
+			Cmd: CMD_PERIOD_DATA,
+		},
+		uint16(MarketLocationFromCode(stockCode)),
+		stockCode,
+		period,
+		0,
+		offset,
+		count,
+		0,
+		0,
+		0,
 	}
 
 	req.Header.Len = req.Size()

@@ -7,6 +7,7 @@ import (
 	"compress/zlib"
 	"bytes"
 	"io"
+	"net"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 
 const (
 	STOCK_CODE_LEN = 6
+	RESP_HEADER_LEN = 16
 )
 
 type Transaction struct {
@@ -73,58 +75,73 @@ type Bid struct {
 	SellVol5 uint32
 }
 
-type parser struct {
+type Record struct {
+	Date uint32
+	Open uint32
+	Close uint32
+	High uint32
+	Low uint32
+	Volume float32
+	Amount float32
+}
+
+type RespParser struct {
 	RawBuffer []byte
 	Current int
 	Data []byte
 }
 
 type InstantTransParser struct {
-	parser
+	RespParser
 	Req *InstantTransReq
 }
 
 type HisTransParser struct {
-	parser
+	RespParser
 	Req *HisTransReq
 }
 
 type InfoExParser struct {
-	parser
+	RespParser
 	Req *InfoExReq
 }
 
 type StockListParser struct {
-	parser
+	RespParser
 	Req *StockListReq
 	Total uint16
 }
 
-func (this *parser) getCmd() uint16 {
+type PeriodDataParser struct {
+	RespParser
+	Req *PeriodDataReq
+}
+
+func (this *RespParser) getCmd() uint16 {
 	return binary.LittleEndian.Uint16(this.RawBuffer[10:12])
 }
 
-func (this *parser) getHeaderLen() int {
-	return 16
+func (this *RespParser) getHeaderLen() int {
+	return RESP_HEADER_LEN
 }
 
-func (this *parser) getLen() uint16 {
+func (this *RespParser) getLen() uint16 {
 	return binary.LittleEndian.Uint16(this.RawBuffer[12:14])
 }
 
-func (this *parser) getLen1() uint16 {
+func (this *RespParser) getLen1() uint16 {
 	return binary.LittleEndian.Uint16(this.RawBuffer[14:16])
 }
 
-func (this *parser) getSeqId() uint32 {
+func (this *RespParser) getSeqId() uint32 {
 	return binary.LittleEndian.Uint32(this.RawBuffer[5:9])
 }
 
-func (this *parser) skipByte(count int) {
+func (this *RespParser) skipByte(count int) {
 	this.Current += count
 }
 
-func (this *parser) skipData(count int) {
+func (this *RespParser) skipData(count int) {
 	for count >= 0 {
 		if this.Data[this.Current] < 0x80 {
 			this.skipByte(1)
@@ -138,32 +155,32 @@ func (this *parser) skipData(count int) {
 	}
 }
 
-func (this *parser) getByte() byte {
+func (this *RespParser) getByte() byte {
 	ret := this.Data[this.Current]
 	this.Current++
 	return ret
 }
 
-func (this *parser) getUint16() uint16 {
+func (this *RespParser) getUint16() uint16 {
 	ret := binary.LittleEndian.Uint16(this.Data[this.Current:this.Current + 2])
 	this.Current += 2
 	return ret
 }
 
-func (this *parser) getUint32() uint32 {
+func (this *RespParser) getUint32() uint32 {
 	ret := binary.LittleEndian.Uint32(this.Data[this.Current:this.Current + 4])
 	this.Current += 4
 	return ret
 }
 
-func (this *parser) getFloat32() float32 {
+func (this *RespParser) getFloat32() float32 {
 	bits := binary.LittleEndian.Uint32(this.Data[this.Current:this.Current + 4])
 	ret := math.Float32frombits(bits)
 	this.Current += 4
 	return ret
 }
 
-func (this *parser) parseData() int {
+func (this *RespParser) parseData() int {
 	v := this.Data[this.Current]
 	if v >= 0x40 && v < 0x80 || v >= 0xc0 {
 		return 0x40 - this.parseData2()
@@ -172,7 +189,7 @@ func (this *parser) parseData() int {
 	}
 }
 
-func (this *parser) parseData2() int {
+func (this *RespParser) parseData2() int {
 	 //8f ff ff ff 1f == -49
 	 //bd ff ff ff 1f == -3
 	 //b0 fe ff ff 1f == -80
@@ -209,7 +226,7 @@ func (this *parser) parseData2() int {
 	return v
 }
 
-func (this *parser) uncompressIf() {
+func (this *RespParser) uncompressIf() {
 	if this.getLen() == this.getLen1() {
 		this.Data = this.RawBuffer[this.getHeaderLen():]
 	} else {
@@ -221,6 +238,13 @@ func (this *parser) uncompressIf() {
 	}
 
 	this.Current = 0
+}
+
+func (this *RespParser) Parse() {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		panic(errors.New("incomplete data"))
+	}
+	this.uncompressIf()
 }
 
 func (this *InstantTransParser) Parse() []*Transaction {
@@ -267,7 +291,7 @@ func (this *InstantTransParser) Parse() []*Transaction {
 
 func NewInstantTransParser(req *InstantTransReq, data []byte) *InstantTransParser {
 	return &InstantTransParser{
-		parser: parser{
+		RespParser: RespParser{
 			RawBuffer: data,
 		},
 		Req: req,
@@ -318,7 +342,7 @@ func (this *HisTransParser) Parse() []*Transaction {
 
 func NewHisTransParser(req *HisTransReq, data []byte) *HisTransParser {
 	return &HisTransParser{
-		parser: parser{
+		RespParser: RespParser{
 			RawBuffer: data,
 		},
 		Req: req,
@@ -382,7 +406,7 @@ func (this *InfoExParser) Parse() map[string][]*InfoExItem {
 
 func NewInfoExParser(req *InfoExReq, data []byte) *InfoExParser {
 	return &InfoExParser{
-		parser: parser{
+		RespParser: RespParser{
 			RawBuffer: data,
 		},
 		Req: req,
@@ -430,8 +454,6 @@ func (this *StockListParser) Parse() map[string]*Bid {
 
 	totalCount := this.getUint16()
 	count := this.getUint16()
-
-
 
 	for ; count > 0; count-- {
 		this.skipByte(1)	// Location
@@ -495,11 +517,93 @@ func (this *StockListParser) Parse() map[string]*Bid {
 	return result
 }
 
-func NewStockListParser(req *StockListReq, data []byte) *StockListParser {
-	return &StockListParser{
-		parser: parser{
+func NewPeriodDataParser(req *PeriodDataReq, data []byte) *PeriodDataParser {
+	return &PeriodDataParser{
+		RespParser: RespParser{
 			RawBuffer: data,
 		},
 		Req: req,
 	}
+}
+
+func (this *PeriodDataParser) Parse() []*Record {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		panic(errors.New("incomplete data"))
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		panic(errors.New("bad seq id"))
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		panic(errors.New("bad cmd"))
+	}
+
+	this.uncompressIf()
+
+	first := true
+	count := this.getUint16()
+	var priceBase int
+
+	result := make([]*Record, count)
+
+	for i := 0; i < int(count); i++ {
+		record := &Record{}
+		record.Date = this.getUint32()
+
+		if first {
+			priceBase = this.parseData2()
+			record.Open = uint32(priceBase)
+			first = false
+		} else {
+			record.Open = uint32(this.parseData() + priceBase)
+		}
+
+		record.Close = uint32(this.parseData() + int(record.Open))
+		record.High = uint32(this.parseData() + int(record.Open))
+		record.Low = uint32(this.parseData() + int(record.Open))
+		record.Volume = this.getFloat32()
+		record.Amount = this.getFloat32()
+		result[i] = record
+
+		priceBase = int(record.Close)
+	}
+
+	return result
+}
+
+func NewStockListParser(req *StockListReq, data []byte) *StockListParser {
+	return &StockListParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
+}
+
+func NewRespParser(data []byte) *RespParser {
+	return &RespParser{RawBuffer: data}
+}
+
+func ReadResp(conn net.Conn) (error, []byte) {
+	header := make([]byte, RESP_HEADER_LEN)
+	n, err := conn.Read(header)
+	if err != nil || n != RESP_HEADER_LEN {
+		return err, nil
+	}
+
+	length := int(binary.LittleEndian.Uint16(header[12:14]))
+	result := make([]byte, length + RESP_HEADER_LEN)
+	copy(result[:RESP_HEADER_LEN], header[:])
+	nRead := n
+
+	for nRead < length {
+		n, err = conn.Read(result[nRead:])
+		if err != nil {
+			return err, nil
+		}
+		nRead += n
+	}
+
+	return nil, result
 }
