@@ -1,4 +1,4 @@
-package entity
+package network
 
 import "bytes"
 import (

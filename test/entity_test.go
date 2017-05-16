@@ -3,7 +3,7 @@ package test
 import (
 	. "github.com/onsi/ginkgo"
 
-	"github.com/TdxProtocol/entity"
+	"github.com/TdxProtocol/network"
 	"fmt"
 	"bytes"
 	"net"
@@ -25,8 +25,8 @@ func chk(err error) {
 	panic(err)
 }
 
-func BuildStockListBuffer() (*bytes.Buffer, *entity.StockListReq) {
-	req := entity.NewStockListReq(1, 0, 80, 80)
+func BuildStockListBuffer() (*bytes.Buffer, *network.StockListReq) {
+	req := network.NewStockListReq(1, 0, 80, 80)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
 	return buf, req
@@ -45,10 +45,10 @@ var _ = Describe("TestSockListReq", func() {
 		_, err = conn.Write(buf.Bytes())
 		chk(err)
 
-		err, buffer := entity.ReadResp(conn)
+		err, buffer := network.ReadResp(conn)
 		chk(err)
 
-		parser := entity.NewStockListParser(req, buffer)
+		parser := network.NewStockListParser(req, buffer)
 		result := parser.Parse()
 		fmt.Println(hex.EncodeToString(parser.Data))
 
@@ -65,8 +65,8 @@ var _ = Describe("TestSockListReq", func() {
 	})
 })
 
-func BuildInfoExBuffer() (*bytes.Buffer, *entity.InfoExReq) {
-	req := entity.NewInfoExReq(1)
+func BuildInfoExBuffer() (*bytes.Buffer, *network.InfoExReq) {
+	req := network.NewInfoExReq(1)
 	req.AddCode("000099")
 	fmt.Println(req)
 	buf := new(bytes.Buffer)
@@ -87,10 +87,10 @@ var _ = Describe("TestInfoExReq", func() {
 		_, err = conn.Write(buf.Bytes())
 		chk(err)
 
-		err, buffer := entity.ReadResp(conn)
+		err, buffer := network.ReadResp(conn)
 		chk(err)
 
-		parser := entity.NewInfoExParser(req, buffer)
+		parser := network.NewInfoExParser(req, buffer)
 		result := parser.Parse()
 		fmt.Println(hex.EncodeToString(parser.Data))
 
@@ -103,8 +103,8 @@ var _ = Describe("TestInfoExReq", func() {
 	})
 })
 
-func BuildInstantTransBuffer() (*bytes.Buffer, *entity.InstantTransReq){
-	req := entity.NewInstantTransReq(1, "600000", 4000, 6000)
+func BuildInstantTransBuffer() (*bytes.Buffer, *network.InstantTransReq){
+	req := network.NewInstantTransReq(1, "600000", 4000, 6000)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
 	return buf, req
@@ -122,10 +122,10 @@ var _ = Describe("TestInstantTransReq", func() {
 		_, err = conn.Write(buf.Bytes())
 		chk(err)
 
-		err, buffer := entity.ReadResp(conn)
+		err, buffer := network.ReadResp(conn)
 		chk(err)
 
-		parser := entity.NewInstantTransParser(req, buffer)
+		parser := network.NewInstantTransParser(req, buffer)
 		result := parser.Parse()
 		//fmt.Println(hex.EncodeToString(parser.Data))
 
@@ -136,8 +136,8 @@ var _ = Describe("TestInstantTransReq", func() {
 	})
 })
 
-func BuildHisTransBuffer() (*bytes.Buffer, *entity.HisTransReq) {
-	req := entity.NewHisTransReq(1, 20170414, "600000", 2000, 1)
+func BuildHisTransBuffer() (*bytes.Buffer, *network.HisTransReq) {
+	req := network.NewHisTransReq(1, 20170414, "600000", 2000, 1)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
 	return buf, req
@@ -156,11 +156,11 @@ var _ = Describe("TestHisTransReq", func() {
 		_, err = conn.Write(buf.Bytes())
 		chk(err)
 
-		err, buffer := entity.ReadResp(conn)
+		err, buffer := network.ReadResp(conn)
 		chk(err)
 		fmt.Println("time cost: ", time.Now().UnixNano() - start)
 
-		parser := entity.NewHisTransParser(req, buffer)
+		parser := network.NewHisTransParser(req, buffer)
 		result := parser.Parse()
 
 		fmt.Println("record count: ", len(result))
@@ -170,8 +170,8 @@ var _ = Describe("TestHisTransReq", func() {
 	})
 })
 
-func BuildPeriodDataBuffer() (*bytes.Buffer, *entity.PeriodDataReq) {
-	req := entity.NewPeriodDataReq(1, "600000", entity.PERIOD_DAY, 0, 0x118)
+func BuildPeriodDataBuffer() (*bytes.Buffer, *network.PeriodDataReq) {
+	req := network.NewPeriodDataReq(1, "600000", network.PERIOD_DAY, 0, 0x118)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
 	return buf, req
@@ -190,11 +190,11 @@ var _ = Describe("TestPeriodDataReq", func() {
 		_, err = conn.Write(buf.Bytes())
 		chk(err)
 
-		err, buffer := entity.ReadResp(conn)
+		err, buffer := network.ReadResp(conn)
 		chk(err)
 		fmt.Println("time cost: ", time.Now().UnixNano() - start)
 
-		parser := entity.NewPeriodDataParser(req, buffer)
+		parser := network.NewPeriodDataParser(req, buffer)
 		result := parser.Parse()
 		fmt.Println(hex.EncodeToString(parser.Data))
 
@@ -217,10 +217,10 @@ var _ = Describe("TestReqData", func () {
 		_, err = conn.Write(reqData)
 		chk(err)
 
-		err, buffer := entity.ReadResp(conn)
+		err, buffer := network.ReadResp(conn)
 		chk(err)
 
-		parser := entity.NewRespParser(buffer)
+		parser := network.NewRespParser(buffer)
 		parser.Parse()
 
 		fmt.Println(hex.EncodeToString(parser.Data))

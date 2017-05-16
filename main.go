@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/TdxProtocol/entity"
+	"github.com/TdxProtocol/network"
 	"fmt"
 	"bytes"
 	"net"
@@ -22,7 +22,7 @@ func chk(err error) {
 }
 
 func BuildInfoExBuffer() *bytes.Buffer {
-	req := entity.NewInfoExReq(1)
+	req := network.NewInfoExReq(1)
 	req.AddCode("600000")
 	req.AddCode("600001")
 	fmt.Println(req)
@@ -33,7 +33,7 @@ func BuildInfoExBuffer() *bytes.Buffer {
 }
 
 func BuildStockListBuffer() *bytes.Buffer {
-	req := entity.NewStockListReq(1, 0, 0, 1)
+	req := network.NewStockListReq(1, 0, 0, 1)
 	fmt.Println(req)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
