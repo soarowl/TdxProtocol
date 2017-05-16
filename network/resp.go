@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"fmt"
 )
 
 const (
@@ -381,7 +382,7 @@ func (this *InfoExParser) Parse() map[string][]*InfoExItem {
 			stockCode1 := string(this.Data[this.Current:this.Current + STOCK_CODE_LEN])
 			this.skipByte(STOCK_CODE_LEN + 1)
 			if stockCode != stockCode1 {
-				panic(errors.New("bad stock code"))
+				panic(errors.New(fmt.Sprintf("bad stock code, stockCode: %s stockCode1: %s", stockCode, stockCode1)))
 			}
 			date := this.getUint32()
 			tp := this.getByte()
