@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"fmt"
+	"github.com/TdxProtocol/util"
 )
 
 const (
@@ -116,6 +117,13 @@ type StockListParser struct {
 type PeriodDataParser struct {
 	RespParser
 	Req *PeriodDataReq
+}
+
+func (this *Record) MinuteString() string {
+	return fmt.Sprintf("Record{date: %s Open: %d Close: %d High: %d Low: %d Volume: %f Amount: %f}",
+		util.FormatMinuteDate(this.Date),
+		this.Open, this.Close, this.High,
+		this.Low, this.Volume, this.Amount)
 }
 
 func (this *RespParser) getCmd() uint16 {

@@ -86,7 +86,7 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 
 		_, codes := api.GetAStockCodes()
 
-		//codes = codes[:10]
+		codes = codes[:10]
 
 		doneChans := make([]chan int, 5)
 		recordCh := make(chan map[string]interface{}, len(codes) + 1)
@@ -104,6 +104,7 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 
 			go func(codes []string, doneCh chan int) {
 				for _, code := range codes {
+					println(code)
 					_, result := api.GetLatestMinuteData(code, 5)
 					recordCh <- map[string]interface{}{"code": code, "record": result}
 				}
@@ -127,7 +128,7 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 
 			result, ok := d["record"].([]*network.Record)
 			if ok {
-				fmt.Println(d["code"], result[0])
+				fmt.Println(d["code"], result[0].MinuteString())
 			}
 		}
 
