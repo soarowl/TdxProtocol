@@ -85,6 +85,7 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 		defer api.Cleanup()
 
 		_, codes := api.GetAStockCodes()
+		sort.Strings(codes)
 
 		codes = codes[:10]
 
@@ -128,7 +129,10 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 
 			result, ok := d["record"].([]*network.Record)
 			if ok {
-				fmt.Println(d["code"], result[0].MinuteString())
+				fmt.Println("stock: ", d["code"])
+				for _, r := range result {
+					fmt.Println(r.MinuteString())
+				}
 			}
 		}
 
