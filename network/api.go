@@ -29,7 +29,7 @@ func (this *API) Initialize(host string) error {
 		return net.Dial("tcp", host)
 	}
 
-	p, err := pool.NewChannelPool(1, 1, factory)
+	p, err := pool.NewChannelPool(5, 5, factory)
 	if err != nil {
 		return err
 	}

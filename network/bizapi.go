@@ -57,6 +57,25 @@ func (this *BizApi) GetSHStockCodes() (error, []string) {
 	return this.getStockCodesByBlock(BLOCK_SH_A)
 }
 
+func (this *BizApi) GetAStockCodes() (error, []string) {
+	result := []string{}
+
+	err, codes := this.GetSZStockCodes()
+	if err != nil {
+		return err, nil
+	}
+
+	result = append(result, codes...)
+
+	err, codes = this.GetSHStockCodes()
+	if err != nil {
+		return err, nil
+	}
+
+	result = append(result, codes...)
+	return nil, result
+}
+
 func (this *BizApi) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
 	result := map[string][]*InfoExItem{}
 
