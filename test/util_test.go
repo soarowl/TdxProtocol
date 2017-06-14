@@ -4,7 +4,7 @@ import (
 . "github.com/onsi/ginkgo"
 
 	"fmt"
-	"github.com/TdxProtocol/util"
+	"github.com/stephenlyu/TdxProtocol/util"
 )
 
 var _ = Describe("FormatMinuteDate", func() {

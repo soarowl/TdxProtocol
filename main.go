@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/TdxProtocol/network"
+	"github.com/stephenlyu/TdxProtocol/network"
 	"fmt"
 	"bytes"
 	"net"

@@ -3,7 +3,7 @@ package test
 import (
 	. "github.com/onsi/ginkgo"
 
-	"github.com/TdxProtocol/network"
+	"github.com/stephenlyu/TdxProtocol/network"
 	"fmt"
 	"sort"
 	"time"

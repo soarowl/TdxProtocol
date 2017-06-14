@@ -9,7 +9,7 @@ import (
 	"io"
 	"net"
 	"fmt"
-	"github.com/TdxProtocol/util"
+	"github.com/stephenlyu/TdxProtocol/util"
 )
 
 const (
