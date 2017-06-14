@@ -32,11 +32,11 @@ type Transaction struct {
 }
 
 type InfoExItem struct {
-	Date uint32
-	Bonus float32
-	DeliveredShares float32
-	RationedSharePrice float32
-	RationedShares float32
+	Date uint32					`json:"date"`
+	Bonus float32				`json:"bonus"`
+	DeliveredShares float32		`json:"delivered_shares"`
+	RationedSharePrice float32	`json:"rationed_share_price"`
+	RationedShares float32		`json:"rationed_shares"`
 }
 
 type Bid struct {
@@ -596,18 +596,21 @@ func NewRespParser(data []byte) *RespParser {
 
 func ReadResp(conn net.Conn) (error, []byte) {
 	header := make([]byte, RESP_HEADER_LEN)
-	n, err := conn.Read(header)
-	if err != nil || n != RESP_HEADER_LEN {
-		return err, nil
+	nRead := 0
+	for nRead < RESP_HEADER_LEN {
+		n, err := conn.Read(header[nRead:])
+		if err != nil {
+			return err, nil
+		}
+		nRead += n
 	}
 
 	length := int(binary.LittleEndian.Uint16(header[12:14]))
 	result := make([]byte, length + RESP_HEADER_LEN)
 	copy(result[:RESP_HEADER_LEN], header[:])
-	nRead := n
 
 	for nRead < length {
-		n, err = conn.Read(result[nRead:])
+		n, err := conn.Read(result[nRead:])
 		if err != nil {
 			return err, nil
 		}

@@ -70,7 +70,7 @@ func (this *API) sendReq(data []byte) (error, []byte) {
 	_, err = conn.Write(data)
 	if err != nil {
 		this.markConnUnusable(conn)
-		return nil, nil
+		return err, nil
 	}
 
 	err, respData := ReadResp(conn)
