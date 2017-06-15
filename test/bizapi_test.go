@@ -110,7 +110,7 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 			go func(codes []string, doneCh chan int) {
 				for _, code := range codes {
 					println(code)
-					_, result := api.GetLatestMinuteData(code, 5)
+					_, result := api.GetLatestMinuteData(code, 0, 5)
 					recordCh <- map[string]interface{}{"code": code, "record": result}
 				}
 				doneCh <- 1

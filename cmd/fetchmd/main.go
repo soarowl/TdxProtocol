@@ -29,7 +29,7 @@ type record struct {
 }
 
 
-func fetchLatestMinuteData(host string, n int, codes []string) (error, map[string][]*record) {
+func fetchLatestMinuteData(host string, offset int, n int, codes []string) (error, map[string][]*record) {
 	err, api := network.CreateBizApi(host)
 	if err != nil {
 		return err, nil
@@ -64,7 +64,7 @@ func fetchLatestMinuteData(host string, n int, codes []string) (error, map[strin
 
 		go func(codes []string, doneCh chan int) {
 			for _, code := range codes {
-				_, result := api.GetLatestMinuteData(code, n)
+				_, result := api.GetLatestMinuteData(code, offset, n)
 				recordCh <- map[string]interface{}{"code": code, "record": result}
 			}
 			doneCh <- 1
@@ -116,6 +116,7 @@ func main() {
 	host := flag.String("host", HOST, "服务器地址")
 	stockCode := flag.String("stock-code", "", "股票代码，以都好分割")
 	count := flag.Int("count", 5, "获取最近的K线数量")
+	offset := flag.Int("offset", 0, "从倒数第一根K线开始获取")
 	filePath := flag.String("output", "./minute-data.json", "文件名")
 	flag.Parse()
 
@@ -129,7 +130,7 @@ func main() {
 	var err error
 	var result map[string][]*record
 	for {
-		err, result = fetchLatestMinuteData(*host, *count, stockCodes)
+		err, result = fetchLatestMinuteData(*host, *offset, *count, stockCodes)
 		if err != nil {
 			fmt.Println("try get minute data error", err)
 			time.Sleep(time.Second)

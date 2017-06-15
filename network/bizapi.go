@@ -103,7 +103,7 @@ func (this *BizApi) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) 
 	return nil, result
 }
 
-func (this *BizApi) GetLatestMinuteData(code string, count int) (error, []*Record) {
+func (this *BizApi) GetLatestMinuteData(code string, offset int, count int) (error, []*Record) {
 	result := []*Record{}
 
 	n := 0
@@ -114,7 +114,7 @@ func (this *BizApi) GetLatestMinuteData(code string, count int) (error, []*Recor
 			c = count - n
 		}
 
-		err, data := this.api.GetMinuteData(code, uint16(n), uint16(c))
+		err, data := this.api.GetMinuteData(code, uint16(offset + n), uint16(c))
 		if err != nil {
 			return err, nil
 		}
