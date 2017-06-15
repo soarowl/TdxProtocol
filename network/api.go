@@ -5,12 +5,14 @@ import (
 	"gopkg.in/fatih/pool.v2"
 	"net"
 	"bytes"
+	"time"
 )
 
 type API struct {
 	seqId			uint32
 	lock    		sync.Mutex
 
+	timeout 		int					// 毫秒数
 	pool 			pool.Pool
 }
 
@@ -24,6 +26,10 @@ func CreateAPI(host string) (error, *API) {
 	return nil, api
 }
 
+func (this *API) SetTimeOut(timeout int) {
+	this.timeout = timeout
+}
+
 func (this *API) Initialize(host string) error {
 	factory := func() (net.Conn, error) {
 		return net.Dial("tcp", host)
@@ -35,6 +41,8 @@ func (this *API) Initialize(host string) error {
 	}
 
 	this.pool = p
+
+	this.timeout = 10 * 1000
 
 	return nil
 }
@@ -67,12 +75,18 @@ func (this *API) sendReq(data []byte) (error, []byte) {
 	}
 	defer conn.Close()
 
+	if this.timeout > 0 {
+		conn.SetDeadline(time.Now().Add(time.Duration(this.timeout) * time.Millisecond))
+	}
 	_, err = conn.Write(data)
 	if err != nil {
 		this.markConnUnusable(conn)
 		return err, nil
 	}
 
+	if this.timeout > 0 {
+		conn.SetDeadline(time.Now().Add(time.Duration(this.timeout) * time.Millisecond))
+	}
 	err, respData := ReadResp(conn)
 	if err != nil {
 		this.markConnUnusable(conn)

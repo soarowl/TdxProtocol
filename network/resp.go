@@ -78,13 +78,13 @@ type Bid struct {
 }
 
 type Record struct {
-	Date uint32
-	Open uint32
-	Close uint32
-	High uint32
-	Low uint32
-	Volume float32
-	Amount float32
+	Date uint32				`json:"date"`
+	Open uint32				`json:"open"`
+	Close uint32			`json:"close"`
+	High uint32				`json:"high"`
+	Low uint32				`json:"low"`
+	Volume float32			`json:"volume"`
+	Amount float32			`json:"amount"`
 }
 
 type RespParser struct {

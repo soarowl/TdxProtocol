@@ -84,17 +84,21 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 		}
 		defer api.Cleanup()
 
+		api.SetTimeOut(1 * 1000)
+
 		_, codes := api.GetAStockCodes()
 		sort.Strings(codes)
 
-		codes = codes[:10]
+		//codes = codes[:10]
 
-		doneChans := make([]chan int, 5)
+		nThread := 10
+
+		doneChans := make([]chan int, nThread)
 		recordCh := make(chan map[string]interface{}, len(codes) + 1)
 
-		count := (len(codes) + 4) / 5
+		count := (len(codes) + 4) / nThread
 		start := time.Now().UnixNano()
-		for i := 0; i < 5; i++ {
+		for i := 0; i < nThread; i++ {
 			doneChans[i] = make(chan int)
 
 			start := i * count
@@ -113,7 +117,7 @@ var _ = Describe("BizApiMinuteDataPerf", func () {
 			}(codes[start:end], doneChans[i])
 		}
 
-		for i := 0; i < 5; i++ {
+		for i := 0; i < nThread; i++ {
 			_ = <- doneChans[i]
 			close(doneChans[i])
 		}

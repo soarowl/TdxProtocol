@@ -19,3 +19,16 @@ func FormatMinuteDate(dateValue uint32) string {
 
 	return fmt.Sprintf("%04d%02d%02d %02d:%02d:00", year, month, day, hour, minute)
 }
+
+func ToWindMinuteDate(dateValue uint32) uint32 {
+	dayValue := uint16(dateValue & 0xFFFF)
+	minuteValue := uint16((dateValue >> 16) & 0xFFFF)
+
+	if minuteValue == 0x30c {
+		minuteValue = 0x2b2
+	}
+
+	minuteValue--
+
+	return (uint32(minuteValue) << 16) | uint32(dayValue)
+}

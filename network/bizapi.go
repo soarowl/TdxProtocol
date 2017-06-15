@@ -25,6 +25,10 @@ func (this *BizApi) Cleanup() {
 	}
 }
 
+func (this *BizApi) SetTimeOut(timeout int) {
+	this.api.SetTimeOut(timeout)
+}
+
 func (this *BizApi) getStockCodesByBlock(block uint16) (error, []string) {
 	err, total, _ := this.api.GetStockList(block, 0, 1)
 	if err != nil {
