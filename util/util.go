@@ -1,6 +1,9 @@
 package util
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func FormatDayDate(dateValue uint32) string {
 	return fmt.Sprintf("%d", dateValue)
@@ -31,4 +34,24 @@ func ToWindMinuteDate(dateValue uint32) uint32 {
 	minuteValue--
 
 	return (uint32(minuteValue) << 16) | uint32(dayValue)
+}
+
+func GetTodayString() string {
+	now := time.Now()
+	return fmt.Sprintf("%04d%02d%02d", now.Year(), now.Month(), now.Day())
+}
+
+func FormatLongDate(date time.Time) string {
+	return fmt.Sprintf("%04d%02d%02d %02d:%02d:%02d", date.Year(), date.Month(), date.Day(),
+		date.Hour(), date.Minute(), date.Second())
+}
+
+func GetNowString() string {
+	now := time.Now()
+	return FormatLongDate(now)
+}
+
+func GetTimeString() string {
+	now := time.Now()
+	return fmt.Sprintf("%02d:%02d:%02d", now.Hour(), now.Minute(), now.Second())
 }
