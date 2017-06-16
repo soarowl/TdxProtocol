@@ -115,9 +115,15 @@ func fetchLatestMinuteData(host string, offset int, n int, codes []string) (erro
 	return nil, result
 }
 
-func runOnce(host string, offset int, count int, stockCodes []string, filePath string) {
-	start := time.Now().UnixNano()
+func saveData(filePath string, result map[string][]*record) {
+	bytes, _ := json.MarshalIndent(result, "", "  ")
+	err := ioutil.WriteFile(filePath, bytes, 0666)
+	if err != nil {
+		panic(err)
+	}
+}
 
+func tryFetchData(host string, offset int, count int, stockCodes []string) map[string][]*record {
 	var err error
 	var result map[string][]*record
 	for {
@@ -129,14 +135,59 @@ func runOnce(host string, offset int, count int, stockCodes []string, filePath s
 		}
 		break
 	}
+
+	return result
+}
+
+func runOnce(host string, offset int, count int, stockCodes []string, filePath string) {
+	start := time.Now().UnixNano()
+
+	result := tryFetchData(host, offset, count, stockCodes)
+
 	fmt.Println("time cost:", (time.Now().UnixNano() - start) / 1000000, "ms")
 	fmt.Println("total: ", len(result))
 
-	bytes, _ := json.MarshalIndent(result, "", "  ")
-	err = ioutil.WriteFile(filePath, bytes, 0666)
-	if err != nil {
-		panic(err)
+	saveData(filePath, result)
+}
+
+func runOnceForDaemon(date string, host string, offset int, stockCodes []string, filePath string) {
+	start := time.Now().UnixNano()
+
+	result := tryFetchData(host, offset, 1, stockCodes)
+
+	if offset == 1 {
+		codes := []string{}
+		for code, record := range result {
+			if len(record) == 0 {
+				continue
+			}
+
+			if record[0].Date == date {
+				continue
+			}
+
+			codes = append(codes, code)
+		}
+		if len(codes) > 0 {
+			fmt.Println(codes)
+		}
+
+		pResult := tryFetchData(host, 0, 2, codes)
+		for code, record := range pResult {
+			if len(record) == 0 {
+				continue
+			}
+
+			if record[0].Date == date {
+				result[code] = record[0:1]
+			} else if record[1].Date == date {
+				result[code] = record[1:]
+			}
+		}
 	}
+	fmt.Println("time cost:", (time.Now().UnixNano() - start) / 1000000, "ms", " total: ", len(result))
+
+	saveData(filePath, result)
 }
 
 func main() {
@@ -199,6 +250,12 @@ func main() {
 					time.Sleep(500 * time.Millisecond)
 					continue
 				}
+				if _, ok := result[indexCode]; !ok {
+					continue
+				}
+				if len(result[indexCode]) == 0 {
+					continue
+				}
 				r := result[indexCode][0]
 
 				if r.Date[0:8] != today {
@@ -209,6 +266,7 @@ func main() {
 				if lastDate != "" && r.Date != lastDate {
 					lastDate = r.Date
 					offset = 1
+					time.Sleep(10 * time.Second)		// Sleep 10 seconds to wait all stock has the predate data.
 					break
 				}
 
@@ -227,7 +285,7 @@ func main() {
 
 			outputFile := filepath.Join(dirName, fmt.Sprintf("%s-%s%s", mainName, prevDate[9:], extName))
 			fmt.Printf("Fetching data at %s...\n", lastDate)
-			runOnce(*host, offset, 1, stockCodes, outputFile)
+			runOnceForDaemon(prevDate, *host, offset, stockCodes, outputFile)
 
 			prevDate = lastDate
 		}
