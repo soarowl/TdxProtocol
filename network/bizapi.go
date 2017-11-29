@@ -1,6 +1,13 @@
 package network
 
-import "fmt"
+import (
+	"fmt"
+	"errors"
+	"io/ioutil"
+	"path/filepath"
+	"os"
+	"time"
+)
 
 type BizApi struct {
 	api *API
@@ -155,4 +162,47 @@ func (this *BizApi) GetLatestDayData(code string, count int) (error, []*Record) 
 	}
 
 	return nil, result
+}
+
+func (this *BizApi) DownloadFile(fileName string, outputDir string) error {
+	err, length := this.api.GetFileLength(fileName)
+	if err != nil {
+		return err
+	}
+
+	fileData := make([]byte, length)
+
+	var offset uint32 = 0
+	var count uint32 = 30000
+
+	var getPacket = func() (error error, packetLength uint32, data []byte) {
+		retryTimes := 0
+		for retryTimes < 3 {
+			err, packetLength, data = this.api.GetFileData(fileName, offset, count)
+			if err == nil {
+				return
+			}
+			time.Sleep(time.Millisecond * 500)
+			retryTimes++
+		}
+		return
+	}
+
+	for offset < length {
+		err, packetLength, data := getPacket()
+		if err != nil {
+			return err
+		}
+		if packetLength != uint32(len(data)) {
+			return errors.New("bad data")
+		}
+
+		copy(fileData[offset:offset + packetLength], data[:])
+
+		offset += count
+	}
+
+	filePath := filepath.Join(outputDir, fileName)
+	os.MkdirAll(filepath.Dir(filePath), 0777)
+	return ioutil.WriteFile(filePath, fileData, 0666)
 }

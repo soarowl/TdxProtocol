@@ -10,6 +10,7 @@ import (
 	"net"
 	"fmt"
 	"github.com/stephenlyu/TdxProtocol/util"
+	"github.com/z-ray/log"
 )
 
 const (
@@ -117,6 +118,16 @@ type StockListParser struct {
 type PeriodDataParser struct {
 	RespParser
 	Req *PeriodDataReq
+}
+
+type GetFileLenParser struct {
+	RespParser
+	Req *GetFileLenReq
+}
+
+type GetFileDataParser struct {
+	RespParser
+	Req *GetFileDataReq
 }
 
 func (this *Record) MinuteString() string {
@@ -526,6 +537,15 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 	return nil, result
 }
 
+func NewStockListParser(req *StockListReq, data []byte) *StockListParser {
+	return &StockListParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
+}
+
 func NewPeriodDataParser(req *PeriodDataReq, data []byte) *PeriodDataParser {
 	return &PeriodDataParser{
 		RespParser: RespParser{
@@ -581,13 +601,69 @@ func (this *PeriodDataParser) Parse() (error, []*Record) {
 	return nil, result
 }
 
-func NewStockListParser(req *StockListReq, data []byte) *StockListParser {
-	return &StockListParser{
+func NewGetFileLenParser(req *GetFileLenReq, data []byte) *GetFileLenParser {
+	return &GetFileLenParser{
 		RespParser: RespParser{
 			RawBuffer: data,
 		},
 		Req: req,
 	}
+}
+
+func (this *GetFileLenParser) Parse() (err error, length uint32) {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		err = errors.New("incomplete data")
+		return
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		err = errors.New("bad seq id")
+		return
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		err = errors.New("bad cmd")
+		return
+	}
+
+	this.uncompressIf()
+
+	length = this.getUint32()
+
+	return
+}
+
+func NewGetFileDataParser(req *GetFileDataReq, data []byte) *GetFileDataParser {
+	return &GetFileDataParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
+}
+
+func (this *GetFileDataParser) Parse() (err error, length uint32, data []byte) {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		err = errors.New("incomplete data")
+		return
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		err = errors.New("bad seq id")
+		return
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		err = errors.New("bad cmd")
+		return
+	}
+
+	this.uncompressIf()
+
+	length = binary.LittleEndian.Uint32(this.Data[:4])
+	data = this.Data[4:]
+
+	return
 }
 
 func NewRespParser(data []byte) *RespParser {
@@ -600,7 +676,10 @@ func ReadResp(conn net.Conn) (error, []byte) {
 	for nRead < RESP_HEADER_LEN {
 		n, err := conn.Read(header[nRead:])
 		if err != nil {
+			log.Errorf("ReadResp - read header fail, error: %v", err)
 			return err, nil
+		} else {
+			log.Infof("ReadResp - read header success, n: %d", n)
 		}
 		nRead += n
 	}
@@ -612,10 +691,27 @@ func ReadResp(conn net.Conn) (error, []byte) {
 	for nRead < length {
 		n, err := conn.Read(result[nRead:])
 		if err != nil {
+			log.Errorf("ReadResp - read data fail, error: %v", err)
 			return err, nil
 		}
 		nRead += n
 	}
 
 	return nil, result
+}
+
+func ReadRespN(conn net.Conn, buffer []byte) (error, []byte) {
+	var nRead int
+
+	for nRead < len(buffer) {
+		n, err := conn.Read(buffer[nRead:])
+		fmt.Printf("read: %d\n", n)
+		if err != nil {
+			return err, nil
+		}
+		nRead += n
+		fmt.Printf("nRead:", nRead)
+	}
+
+	return nil, buffer[:nRead]
 }

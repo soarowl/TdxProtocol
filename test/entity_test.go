@@ -10,6 +10,10 @@ import (
 	"encoding/hex"
 	"sort"
 	"time"
+	"baiwenbao.com/arbitrage/util"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 const (
@@ -22,7 +26,7 @@ func chk(err error) {
 		return
 	}
 
-	fmt.Println(err)
+	fmt.Println("error:", err)
 	panic(err)
 }
 
@@ -105,7 +109,7 @@ var _ = Describe("TestInfoExReq", func() {
 })
 
 func BuildInstantTransBuffer() (*bytes.Buffer, *network.InstantTransReq){
-	req := network.NewInstantTransReq(1, "600000", 4000, 6000)
+	req := network.NewInstantTransReq(1, "600000", 0, 100)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
 	return buf, req
@@ -138,7 +142,7 @@ var _ = Describe("TestInstantTransReq", func() {
 })
 
 func BuildHisTransBuffer() (*bytes.Buffer, *network.HisTransReq) {
-	req := network.NewHisTransReq(1, 20170414, "600000", 2000, 1)
+	req := network.NewHisTransReq(1, 20170414, "600000", 0, 100)
 	buf := new(bytes.Buffer)
 	req.Write(buf)
 	return buf, req
@@ -206,6 +210,106 @@ var _ = Describe("TestPeriodDataReq", func() {
 	})
 })
 
+func BuildGetFileLenBuffer(fileName string) (*bytes.Buffer, *network.GetFileLenReq) {
+	req := network.NewGetFileLenReq(1, fileName)
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+	return buf, req
+}
+
+var _ = Describe("TestGetFileLenReq", func() {
+	It("test", func() {
+		fmt.Println("TestGetFileLenReq...")
+		buf, req := BuildGetFileLenBuffer("zhb.zip")
+
+		start := time.Now().UnixNano()
+		conn, err := net.Dial("tcp", HOST)
+		chk(err)
+		defer conn.Close()
+
+		_, err = conn.Write(buf.Bytes())
+		chk(err)
+
+		err, buffer := network.ReadResp(conn)
+		chk(err)
+		fmt.Println("time cost: ", time.Now().UnixNano() - start)
+
+		parser := network.NewGetFileLenParser(req, buffer)
+		_, length := parser.Parse()
+		fmt.Println(hex.EncodeToString(parser.Data))
+
+		fmt.Println("file length: ", length)
+	})
+})
+
+func BuildGetFileDataBuffer(fileName string, offset uint32, length uint32) (*bytes.Buffer, *network.GetFileDataReq) {
+	req := network.NewGetFileDataReq(1, fileName, offset, length)
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+	return buf, req
+}
+
+var _ = Describe("TestGetFileDataReq", func() {
+	var getFileLen = func (fileName string) uint32 {
+		buf, req := BuildGetFileLenBuffer(fileName)
+
+		start := time.Now().UnixNano()
+		conn, err := net.Dial("tcp", HOST)
+		chk(err)
+		defer conn.Close()
+
+		_, err = conn.Write(buf.Bytes())
+		chk(err)
+
+		err, buffer := network.ReadResp(conn)
+		chk(err)
+		fmt.Println("time cost: ", time.Now().UnixNano() - start)
+
+		parser := network.NewGetFileLenParser(req, buffer)
+		_, length := parser.Parse()
+		return length
+	}
+
+	It("test", func() {
+		fmt.Println("TestGetFileDataReq...")
+		fileName := "bi/bigdata.zip"
+
+		length := getFileLen(fileName)
+
+		start := time.Now().UnixNano()
+		conn, err := net.Dial("tcp", HOST)
+		chk(err)
+		defer conn.Close()
+
+		fileData := make([]byte, length)
+
+		var offset uint32 = 0
+		var count uint32 = 30000
+
+		for offset < length {
+			buf, req := BuildGetFileDataBuffer(fileName, offset, count)
+			_, err = conn.Write(buf.Bytes())
+			chk(err)
+
+			err, buffer := network.ReadResp(conn)
+			chk(err)
+			fmt.Println("time cost: ", time.Now().UnixNano() - start)
+
+			parser := network.NewGetFileDataParser(req, buffer)
+			_, packetLength, data := parser.Parse()
+			util.Assert(packetLength == uint32(len(data)), "")
+
+			copy(fileData[offset:offset + packetLength], data[:])
+
+			offset += count
+		}
+
+		filePath := filepath.Join("temp", fileName)
+		os.MkdirAll(filepath.Dir(filePath), 0777)
+		ioutil.WriteFile(filePath, fileData, 0666)
+	})
+})
+
 var _ = Describe("TestReqData", func () {
 	It("test", func() {
 		reqHex := "0c57086401011c001c002d050000333030313732040001000100180100000000000000000000"
@@ -224,6 +328,29 @@ var _ = Describe("TestReqData", func () {
 		parser := network.NewRespParser(buffer)
 		parser.Parse()
 
+		fmt.Println(hex.EncodeToString(parser.Data))
+	})
+})
+
+var _ = Describe("TestCmd06b9", func () {
+	It("test", func() {
+		reqHex := "0c5e186a00016e006e00b906b01e0400307500007a68622e7a6970000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+		reqData, _ := hex.DecodeString(reqHex)
+
+		conn, err := net.Dial("tcp", HOST)
+		chk(err)
+		defer conn.Close()
+
+		_, err = conn.Write(reqData)
+		chk(err)
+
+		err, buffer := network.ReadResp(conn)
+		chk(err)
+
+		parser := network.NewRespParser(buffer)
+		parser.Parse()
+
+		fmt.Printf("data len: %d\n", len(parser.Data))
 		fmt.Println(hex.EncodeToString(parser.Data))
 	})
 })

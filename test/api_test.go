@@ -12,12 +12,13 @@ var _ = Describe("GetStockList", func () {
 	It("test", func() {
 		err, api := network.CreateAPI(HOST)
 		if err != nil {
-			fmt.Println(err)
+			chk(err)
 			return
 		}
 		defer api.Cleanup()
 
-		_, total, result := api.GetStockList(network.BLOCK_SH_A, 0, 10)
+		err, total, result := api.GetStockList(network.BLOCK_SH_A, 0, 10)
+		chk(err)
 		fmt.Println("total:", total, " got:", len(result))
 		codes := []string{}
 		for k, _ := range result {

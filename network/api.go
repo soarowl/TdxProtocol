@@ -143,6 +143,34 @@ func (this *API) GetPeriodData(code string, period, offset, count uint16) (error
 	return parser.Parse()
 }
 
+func (this *API) GetFileLength(fileName string) (error, uint32) {
+	req := NewGetFileLenReq(this.nextSeqId(), fileName)
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+
+	err, respData := this.sendReq(buf.Bytes())
+	if err != nil {
+		return err, 0
+	}
+
+	parser := NewGetFileLenParser(req, respData)
+	return parser.Parse()
+}
+
+func (this *API) GetFileData(fileName string, offset uint32, length uint32) (error, uint32, []byte) {
+	req := NewGetFileDataReq(this.nextSeqId(), fileName, offset, length)
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+
+	err, respData := this.sendReq(buf.Bytes())
+	if err != nil {
+		return err, 0, nil
+	}
+
+	parser := NewGetFileDataParser(req, respData)
+	return parser.Parse()
+}
+
 func (this *API) GetMinuteData(code string, offset, count uint16) (error, []*Record) {
 	return this.GetPeriodData(code, PERIOD_MINUTE, offset, count)
 }

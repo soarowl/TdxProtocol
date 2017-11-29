@@ -12,6 +12,9 @@ const (
 	CMD_INSTANT_TRANS = 0x0fc5
 	CMD_HIS_TRANS = 0x0fb5
 	CMD_HEART_BEAT = 0x0523
+
+	CMD_GET_FILE_LEN = 0x2c5
+	CMD_GET_FILE_DATA = 0x6b9
 )
 
 const (
@@ -85,6 +88,18 @@ type PeriodDataReq struct {
 	Unknown2 uint32			// 0
 	Unknown3 uint32			// 0
 	Unknown4 uint16			// 0
+}
+
+type GetFileLenReq struct {
+	Header Header
+	FileName string
+}
+
+type GetFileDataReq struct {
+	Header Header
+	Offset uint32
+	Length uint32
+	FileName string
 }
 
 func MarketLocationFromCode(stockCode string) byte {
@@ -330,6 +345,71 @@ func NewPeriodDataReq(seqId uint32, stockCode string, period uint16, offset uint
 		0,
 		0,
 		0,
+	}
+
+	req.Header.Len = req.Size()
+	req.Header.Len1 = req.Header.Len
+
+	return req
+}
+
+func (this *GetFileLenReq) Write(writer *bytes.Buffer) {
+	this.Header.Write(writer)
+	bytes := make([]byte, 40)
+	copy(bytes, []byte(this.FileName))
+	writer.Write(bytes)
+}
+
+func (this *GetFileLenReq) Size() uint16 {
+	return 42
+}
+
+func NewGetFileLenReq(seqId uint32, fileName string) *GetFileLenReq {
+	req := &GetFileLenReq{
+		Header{
+			Zip: 0xc,
+			SeqId: seqId,
+			PacketType: 0x1,
+			Len: 0,
+			Len1: 0,
+			Cmd: CMD_GET_FILE_LEN,
+		},
+		fileName,
+	}
+
+	req.Header.Len = req.Size()
+	req.Header.Len1 = req.Header.Len
+
+	return req
+}
+
+func (this *GetFileDataReq) Write(writer *bytes.Buffer) {
+	this.Header.Write(writer)
+	writeUInt32(writer, this.Offset)
+	writeUInt32(writer, this.Length)
+
+	bytes := make([]byte, 100)
+	copy(bytes, []byte(this.FileName))
+	writer.Write(bytes)
+}
+
+func (this *GetFileDataReq) Size() uint16 {
+	return 110
+}
+
+func NewGetFileDataReq(seqId uint32, fileName string, offset uint32, length uint32) *GetFileDataReq {
+	req := &GetFileDataReq{
+		Header{
+			Zip: 0xc,
+			SeqId: seqId,
+			PacketType: 0x1,
+			Len: 0,
+			Len1: 0,
+			Cmd: CMD_GET_FILE_DATA,
+		},
+		offset,
+		length,
+		fileName,
 	}
 
 	req.Header.Len = req.Size()
