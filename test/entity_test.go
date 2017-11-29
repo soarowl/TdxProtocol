@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"encoding/json"
 )
 
 const (
@@ -104,6 +105,47 @@ var _ = Describe("TestInfoExReq", func() {
 			for _, t := range l {
 				fmt.Println(t)
 			}
+		}
+	})
+})
+
+func BuildFinanceBuffer() (*bytes.Buffer, *network.FinanceReq) {
+	req := network.NewFinanceReq(1)
+	req.AddCode("600000")
+	req.AddCode("000001")
+	req.AddCode("000488")
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+	fmt.Println(buf.Bytes())
+	return buf, req
+}
+
+var _ = Describe("TestFinanceReq", func() {
+	It("test", func () {
+		fmt.Println("TestFinanceReq...")
+		buf, req := BuildFinanceBuffer()
+
+		conn, err := net.Dial("tcp", HOST)
+		chk(err)
+		defer conn.Close()
+
+		_, err = conn.Write(buf.Bytes())
+		chk(err)
+
+		err, buffer := network.ReadResp(conn)
+		chk(err)
+
+		//parser := network.NewRespParser(buffer)
+		//parser.TryParse()
+		//fmt.Println(hex.EncodeToString(parser.Data))
+
+		parser := network.NewFinanceParser(req, buffer)
+		err, finances := parser.Parse()
+		chk(err)
+
+		for code, finance := range finances {
+			bytes, _ := json.MarshalIndent(finance, "", "  ")
+			fmt.Println(code, string(bytes))
 		}
 	})
 })

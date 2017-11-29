@@ -129,6 +129,23 @@ func (this *API) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
 	return parser.Parse()
 }
 
+func (this *API) GetFinance(codes []string) (error, map[string]*Finance) {
+	req := NewFinanceReq(this.nextSeqId())
+	for _, code := range codes {
+		req.AddCode(code)
+	}
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+
+	err, respData := this.sendReq(buf.Bytes())
+	if err != nil {
+		return err, nil
+	}
+
+	parser := NewFinanceParser(req, respData)
+	return parser.Parse()
+}
+
 func (this *API) GetPeriodData(code string, period, offset, count uint16) (error, []*Record) {
 	req := NewPeriodDataReq(this.nextSeqId(), code, period, offset, count)
 	buf := new(bytes.Buffer)

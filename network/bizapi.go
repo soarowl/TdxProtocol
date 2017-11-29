@@ -110,6 +110,29 @@ func (this *BizApi) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) 
 	return nil, result
 }
 
+func (this *BizApi) GetFinance(codes []string) (error, map[string]*Finance) {
+	result := map[string]*Finance{}
+
+	n := 100
+	for i := 0; i < len(codes); i += n {
+		end := i + n
+		if end > len(codes) {
+			end = len(codes)
+		}
+		subCodes := codes[i:end]
+		err, finances := this.api.GetFinance(subCodes)
+		if err != nil {
+			return err, nil
+		}
+
+		for k, v := range finances {
+			result[k] = v
+		}
+	}
+
+	return nil, result
+}
+
 func (this *BizApi) GetLatestMinuteData(code string, offset int, count int) (error, []*Record) {
 	result := []*Record{}
 

@@ -55,6 +55,30 @@ var _ = Describe("BizApiGetInfoEx", func () {
 	})
 })
 
+var _ = Describe("BizApiGetInfoEx", func () {
+	It("test", func() {
+		fmt.Println("test GetInfoEx...")
+		err, api := network.CreateBizApi(HOST_ONLY)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer api.Cleanup()
+
+		_, codes := api.GetSZStockCodes()
+
+		start := time.Now().UnixNano()
+		_, result := api.GetInfoEx(codes)
+		fmt.Println("got:", len(result), "time cost:", (time.Now().UnixNano() - start) / 1000000, "ms")
+		for k, l := range result {
+			fmt.Println(k)
+			for _, t := range l {
+				fmt.Println(t)
+			}
+		}
+	})
+})
+
 var _ = Describe("BizApiGetDayData", func () {
 	It("test", func() {
 		fmt.Println("test GetDayData...")

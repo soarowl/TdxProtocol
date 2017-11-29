@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"github.com/stephenlyu/TdxProtocol/util"
 	"github.com/z-ray/log"
+	"encoding/hex"
+	"reflect"
+	"strings"
 )
 
 const (
@@ -38,6 +41,49 @@ type InfoExItem struct {
 	DeliveredShares float32		`json:"delivered_shares"`
 	RationedSharePrice float32	`json:"rationed_share_price"`
 	RationedShares float32		`json:"rationed_shares"`
+}
+
+type Finance struct {
+	BShares float32				`json:"bShares"`
+	HShares float32				`json:"hShares"`
+	ProfitPerShare float32		`json:"profitPerShare"`
+	TotalAssets float32			`json:"totalAssets"`
+	CurrentAssets float32 		`json:"currentAssets"`
+	FixedAssets float32 		`json:"fixedAssets"`
+	IntangibleAssets float32 	`json:"intangibleAssets"`
+	ShareHolders float32 		`json:"shareHolders"`
+	CurrentLiability float32 	`json:"currentLiability"`
+	MinorShareRights float32 	`json:"minorShareRights"`
+	PublicReserveFunds float32 	`json:"publicReserveFunds"`
+	NetAssets float32 			`json:"netAssets"`
+	OperatingIncome float32 	`json:"operatingIncome"`
+	OperatingCost float32 		`json:"operatingCost"`
+	Receivables float32 		`json:"receivables"`
+	OperationProfit float32 	`json:"operatingProfit"`
+	InvestProfit float32 		`json:"investProfit"`
+	OperatingCash float32 		`json:"operatingCash"`
+	TotalCash float32 			`json:"totalCash"`
+	Inventory float32 			`json:"inventory"`
+	TotalProfit float32 		`json:"totalProfit"`
+	NOPAT float32 				`json:"nopat"`				// 税后利润
+	NetProfit float32 			`json:"netProfit"`
+	UndistributedProfit float32 `json:"undistributedProfit"`
+	NetAdjustedAssets float32 	`json:"netAdjustedAssets"`		// 调整后净资
+}
+
+func (this *Finance) String() string {
+	value := reflect.ValueOf(this).Elem()
+	t := reflect.TypeOf(this).Elem()
+	lines := make([]string, t.NumField() + 2)
+	lines[0] = "{"
+	lines[len(lines) - 1] = "}"
+	for i := 0; i < value.NumField(); i++ {
+		f := value.Field(i)
+		v := f.Float()
+		name := t.Field(i).Name
+		lines[i+1] = fmt.Sprintf("%20s: %.02f", name, v)
+	}
+	return strings.Join(lines, "\n")
 }
 
 type Bid struct {
@@ -107,6 +153,11 @@ type HisTransParser struct {
 type InfoExParser struct {
 	RespParser
 	Req *InfoExReq
+}
+
+type FinanceParser struct {
+	RespParser
+	Req *FinanceReq
 }
 
 type StockListParser struct {
@@ -265,6 +316,64 @@ func (this *RespParser) Parse() {
 		panic(errors.New("incomplete data"))
 	}
 	this.uncompressIf()
+}
+
+func (this *RespParser) tryParseData() (err error, v int) {
+	err = nil
+	defer func() {
+		if err1 := recover(); err1 != nil {
+			err = err1.(error)
+		}
+	}()
+
+	v = this.parseData()
+	return
+}
+
+func (this *RespParser) TryParse() {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		panic(errors.New("incomplete data"))
+	}
+	this.uncompressIf()
+
+	var f float32
+	var i16 uint16
+	var i32 uint32
+	var iData int
+
+	var err error
+
+	for i := 0; i < len(this.Data) - 2; i++ {
+		end := i+4
+		if end > len(this.Data) {
+			end = len(this.Data)
+		}
+		fmt.Printf("%4d. %v\t", i, hex.EncodeToString(this.Data[i:end]))
+		if i < len(this.Data) - 4 {
+			f = this.getFloat32()
+			fmt.Printf("\t%50.2f", f)
+			this.Current -= 4
+			i16 = this.getUint16()
+			fmt.Printf("\t%6d", i16)
+			this.Current -= 2
+			i32 = this.getUint32()
+			fmt.Printf("\t%10d", i32)
+			this.Current -= 4
+		}
+
+		current := this.Current
+		err, iData = this.tryParseData()
+		if err != nil {
+			fmt.Print("\tNaN")
+		} else {
+			fmt.Printf("\t%10d", iData)
+		}
+		this.Current = current
+
+		fmt.Printf("\t%s\n", string(this.Data[i:end]))
+
+		this.Current++
+	}
 }
 
 func (this *InstantTransParser) Parse() (error, []*Transaction) {
@@ -431,6 +540,80 @@ func NewInfoExParser(req *InfoExReq, data []byte) *InfoExParser {
 		},
 		Req: req,
 	}
+}
+
+func NewFinanceParser(req *FinanceReq, data []byte) *FinanceParser {
+	return &FinanceParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
+}
+
+func (this *FinanceParser) Parse() (err error, finances map[string]*Finance) {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		err = errors.New("incomplete data")
+		return
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		err = errors.New("bad seq id")
+		return
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		err = errors.New("bad cmd")
+		return
+	}
+
+	this.uncompressIf()
+
+	finances = make(map[string]*Finance)
+
+	count := this.getUint16()
+
+	for ; count > 0; count-- {
+		this.skipByte(1)
+		stockCode := string(this.Data[this.Current:this.Current + STOCK_CODE_LEN])
+		this.skipByte(STOCK_CODE_LEN)
+
+		finance := new(Finance)
+
+		this.skipByte(41 - (3 + STOCK_CODE_LEN))
+
+		finance.BShares = this.getFloat32()                // 41
+		finance.HShares = this.getFloat32()                // 45
+		finance.ProfitPerShare = this.getFloat32()        // 49
+		finance.TotalAssets = this.getFloat32()            // 53
+		finance.CurrentAssets = this.getFloat32()        // 57
+		finance.FixedAssets = this.getFloat32()            // 61
+		finance.IntangibleAssets = this.getFloat32()    // 65
+		finance.ShareHolders = this.getFloat32()        // 69
+		finance.CurrentLiability = this.getFloat32()    // 73
+		finance.MinorShareRights = this.getFloat32()    // 77
+		finance.PublicReserveFunds = this.getFloat32()    // 81
+		finance.NetAssets = this.getFloat32()            // 85
+		finance.OperatingIncome = this.getFloat32()        // 89
+		finance.OperatingCost = this.getFloat32()        // 93
+		finance.Receivables = this.getFloat32()            // 97
+		finance.OperationProfit = this.getFloat32()        // 101
+		finance.InvestProfit = this.getFloat32()        // 105
+		finance.OperatingCash = this.getFloat32()        // 109
+		finance.TotalCash = this.getFloat32()            // 113
+		finance.Inventory = this.getFloat32()            // 117
+		finance.TotalProfit = this.getFloat32()            // 121
+		finance.NOPAT = this.getFloat32()                // 125
+		finance.NetProfit = this.getFloat32()            // 129
+		finance.UndistributedProfit = this.getFloat32()    // 133
+		finance.NetAdjustedAssets = this.getFloat32()    // 137
+
+		this.skipByte(4)
+
+		finances[stockCode] = finance
+	}
+
+	return
 }
 
 func (this *StockListParser) isStockValid(s []byte) bool {

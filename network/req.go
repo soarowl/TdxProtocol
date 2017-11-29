@@ -7,6 +7,7 @@ import (
 
 const (
 	CMD_INFO_EX = 0x000f
+	CMD_XXX = 0x0010
 	CMD_STOCK_LIST = 0x0524
 	CMD_PERIOD_DATA = 0x052d
 	CMD_INSTANT_TRANS = 0x0fc5
@@ -46,6 +47,12 @@ type StockDef struct {
 }
 
 type InfoExReq struct {
+	Header Header
+	Count uint16
+	Stocks []*StockDef
+}
+
+type FinanceReq struct {
 	Header Header
 	Count uint16
 	Stocks []*StockDef
@@ -202,6 +209,45 @@ func NewInfoExReq(seqId uint32) *InfoExReq {
 	return req
 }
 
+func (this *FinanceReq) Write(writer *bytes.Buffer) {
+	this.Header.Write(writer)
+	writeUInt16(writer, this.Count)
+
+	for _, o := range this.Stocks {
+		o.Write(writer)
+	}
+}
+
+func (this *FinanceReq) Size() int {
+	return 4 + 7 * len(this.Stocks)
+}
+
+func (this *FinanceReq) AddCode(stockCode string) {
+	v := &StockDef{
+		MarketLocationFromCode(stockCode),
+		stockCode,
+	}
+
+	this.Stocks = append(this.Stocks, v)
+	this.Count = uint16(len(this.Stocks))
+	this.Header.SetLength(uint16(this.Size()))
+}
+
+func NewFinanceReq(seqId uint32) *FinanceReq {
+	req := &FinanceReq{
+		Header{
+			Zip: 0xc,
+			SeqId: seqId,
+			PacketType: 0x1,
+			Len: 0,
+			Len1: 0,
+			Cmd: CMD_XXX,
+		},
+		0,
+		[]*StockDef {},
+	}
+	return req
+}
 
 func (this *StockListReq) Write(writer *bytes.Buffer) {
 	this.Header.Write(writer)
