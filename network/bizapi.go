@@ -7,20 +7,24 @@ import (
 	"path/filepath"
 	"os"
 	"time"
+	"github.com/stephenlyu/tds/datasource/tdx"
+	"github.com/stephenlyu/tds/util"
+	"github.com/stephenlyu/tds/date"
 )
+
+var blockExchangeMap = map[uint16]string{
+	0: "SZ",
+	1: "SH",
+}
 
 type BizApi struct {
 	api *API
 
 	workDir string
-
-	stockCodeCache map[uint16][]string
 }
 
 func CreateBizApi(host string) (error, *BizApi) {
-	result := &BizApi{
-		stockCodeCache: make(map[uint16][]string),
-	}
+	result := &BizApi{workDir: "temp"}
 	err, api := CreateAPI(fmt.Sprintf("%s:7709", host))
 	if err != nil {
 		return err, nil
@@ -47,18 +51,32 @@ func (this *BizApi) SetWorkDir(dir string) {
 }
 
 func (this *BizApi) getStockCodesByBlock(block uint16) (error, []string) {
-	if ret, ok := this.stockCodeCache[block]; ok {
-		return nil, ret
+	exchange, ok := blockExchangeMap[block]
+	if !ok {
+		return nil, nil
 	}
 
-	outputDir := filepath.Join(this.workDir, "T0002/hg_cache")
+	outputDir := filepath.Join(this.workDir, "T0002/hq_cache")
 	zhbFile := "zhb.zip"
-	err := this.DownloadFile(zhbFile, outputDir)
-	if err != nil {
-		return err, nil
+
+	zhbFilePath := filepath.Join(outputDir, zhbFile)
+	stats, err := os.Stat(zhbFilePath)
+
+	today := date.GetTodayString()
+
+	if os.IsNotExist(err) || date.ToDayString(stats.ModTime()) < today {
+		err := this.DownloadFile(zhbFile, outputDir)
+		if err != nil {
+			return err, nil
+		}
+		err = util.UnzipFile(zhbFilePath, outputDir)
+		if err != nil {
+			return err, nil
+		}
 	}
 
-	return nil, nil
+	ds := tdxdatasource.NewDataSource(this.workDir, true)
+	return nil, ds.GetStockCodes(exchange)
 }
 
 func (this *BizApi) GetSZStockCodes() (error, []string) {
