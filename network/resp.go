@@ -160,9 +160,9 @@ type FinanceParser struct {
 	Req *FinanceReq
 }
 
-type StockListParser struct {
+type BidParser struct {
 	RespParser
-	Req *StockListReq
+	Req Request
 	Total uint16
 }
 
@@ -330,11 +330,20 @@ func (this *RespParser) tryParseData() (err error, v int) {
 	return
 }
 
+func (this *RespParser) tryParseData2() (err error, v int) {
+	err = nil
+	defer func() {
+		if err1 := recover(); err1 != nil {
+			err = err1.(error)
+		}
+	}()
+
+	v = this.parseData2()
+	return
+}
+
 func (this *RespParser) TryParse() {
-	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
-		panic(errors.New("incomplete data"))
-	}
-	this.uncompressIf()
+	this.Current = 0
 
 	var f float32
 	var i16 uint16
@@ -370,7 +379,15 @@ func (this *RespParser) TryParse() {
 		}
 		this.Current = current
 
-		fmt.Printf("\t%s\n", string(this.Data[i:end]))
+		err, iData = this.tryParseData2()
+		if err != nil {
+			fmt.Print("\tNaN")
+		} else {
+			fmt.Printf("\t%10d", iData)
+		}
+		this.Current = current
+
+		fmt.Printf("\n")
 
 		this.Current++
 	}
@@ -616,7 +633,7 @@ func (this *FinanceParser) Parse() (err error, finances map[string]*Finance) {
 	return
 }
 
-func (this *StockListParser) isStockValid(s []byte) bool {
+func (this *BidParser) isStockValid(s []byte) bool {
 	if len(s) < STOCK_CODE_LEN {
 		return false
 	}
@@ -629,7 +646,7 @@ func (this *StockListParser) isStockValid(s []byte) bool {
 	return true
 }
 
-func (this *StockListParser) searchStockCode() int {
+func (this *BidParser) searchStockCode() int {
 	for i := this.Current; i < len(this.Data); i++ {
 		if this.isStockValid(this.Data[i:]) {
 			return i - this.Current - 1
@@ -638,24 +655,30 @@ func (this *StockListParser) searchStockCode() int {
 	panic(errors.New("no stock code found"))
 }
 
-func (this *StockListParser) Parse() (error, map[string]*Bid) {
+func (this *BidParser) decrypt() {
+	for i, b := range this.Data {
+		this.Data[i] = b ^ 57
+	}
+}
+
+func (this *BidParser) Parse() (error, map[string]*Bid) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
 		return errors.New("incomplete data"), nil
 	}
 
-	if this.getSeqId() != this.Req.Header.SeqId {
+	if this.getSeqId() != this.Req.GetSeqId() {
 		return errors.New("bad seq id"), nil
 	}
 
-	if this.getCmd() != this.Req.Header.Cmd {
+	if this.getCmd() != this.Req.GetCmd() {
 		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
+	this.decrypt()
 
 	result := map[string]*Bid{}
 
-	totalCount := this.getUint16()
 	count := this.getUint16()
 
 	for ; count > 0; count-- {
@@ -674,6 +697,8 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 
 		this.parseData()
 		this.parseData()
+		this.parseData()
+		this.parseData()
 
 		bid.Vol = uint32(this.parseData2())
 		this.parseData2()
@@ -681,8 +706,8 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 		bid.InnerVol = uint32(this.parseData2())
 		bid.OuterVol = uint32(this.parseData2())
 
-		this.parseData()
 		this.skipByte(1)
+		this.parseData()
 
 		bid.BuyPrice1 = uint32(this.parseData() + int(bid.Close))
 		bid.SellPrice1 = uint32(this.parseData() + int(bid.Close))
@@ -716,12 +741,11 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 			this.skipByte(n)
 		}
 	}
-	this.Total = totalCount
 	return nil, result
 }
 
-func NewStockListParser(req *StockListReq, data []byte) *StockListParser {
-	return &StockListParser{
+func NewStockListParser(req Request, data []byte) *BidParser {
+	return &BidParser{
 		RespParser: RespParser{
 			RawBuffer: data,
 		},

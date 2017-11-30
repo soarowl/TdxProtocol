@@ -96,22 +96,6 @@ func (this *API) sendReq(data []byte) (error, []byte) {
 	return err, respData
 }
 
-func (this *API) GetStockList(block uint16, offset uint16, count uint16) (error, int, map[string]*Bid) {
-	req := NewStockListReq(this.nextSeqId(), block, offset, count)
-	buf := new(bytes.Buffer)
-	req.Write(buf)
-
-	err, respData := this.sendReq(buf.Bytes())
-	if err != nil {
-		return err, 0, nil
-	}
-
-	parser := NewStockListParser(req, respData)
-	err, result := parser.Parse()
-
-	return err, int(parser.Total), result
-}
-
 func (this *API) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
 	req := NewInfoExReq(this.nextSeqId())
 	for _, code := range codes {

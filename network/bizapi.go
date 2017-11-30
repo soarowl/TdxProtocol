@@ -11,10 +11,16 @@ import (
 
 type BizApi struct {
 	api *API
+
+	workDir string
+
+	stockCodeCache map[uint16][]string
 }
 
 func CreateBizApi(host string) (error, *BizApi) {
-	result := &BizApi{}
+	result := &BizApi{
+		stockCodeCache: make(map[uint16][]string),
+	}
 	err, api := CreateAPI(fmt.Sprintf("%s:7709", host))
 	if err != nil {
 		return err, nil
@@ -36,28 +42,23 @@ func (this *BizApi) SetTimeOut(timeout int) {
 	this.api.SetTimeOut(timeout)
 }
 
+func (this *BizApi) SetWorkDir(dir string) {
+	this.workDir = dir
+}
+
 func (this *BizApi) getStockCodesByBlock(block uint16) (error, []string) {
-	err, total, _ := this.api.GetStockList(block, 0, 1)
+	if ret, ok := this.stockCodeCache[block]; ok {
+		return nil, ret
+	}
+
+	outputDir := filepath.Join(this.workDir, "T0002/hg_cache")
+	zhbFile := "zhb.zip"
+	err := this.DownloadFile(zhbFile, outputDir)
 	if err != nil {
 		return err, nil
 	}
 
-	result := make([]string, total)
-	count := 0
-
-	for count < total {
-		err, _, bids := this.api.GetStockList(block, uint16(count), 80)
-		if err != nil {
-			return err, nil
-		}
-
-		for k, _ := range bids {
-			result[count] = k
-			count++
-		}
-	}
-
-	return nil, result
+	return nil, nil
 }
 
 func (this *BizApi) GetSZStockCodes() (error, []string) {

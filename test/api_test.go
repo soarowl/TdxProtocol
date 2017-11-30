@@ -5,32 +5,7 @@ import (
 
 	"github.com/stephenlyu/TdxProtocol/network"
 	"fmt"
-	"sort"
 )
-
-var _ = Describe("GetStockList", func () {
-	It("test", func() {
-		err, api := network.CreateAPI(HOST)
-		if err != nil {
-			chk(err)
-			return
-		}
-		defer api.Cleanup()
-
-		err, total, result := api.GetStockList(network.BLOCK_SH_A, 0, 10)
-		chk(err)
-		fmt.Println("total:", total, " got:", len(result))
-		codes := []string{}
-		for k, _ := range result {
-			codes = append(codes, k)
-		}
-		sort.Strings(codes)
-
-		for _, c := range codes {
-			fmt.Println(c)
-		}
-	})
-})
 
 
 var _ = Describe("GetInfoEx", func () {

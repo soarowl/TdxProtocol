@@ -7,8 +7,8 @@ import (
 
 const (
 	CMD_INFO_EX = 0x000f
-	CMD_XXX = 0x0010
-	CMD_STOCK_LIST = 0x0524
+	CMD_FINANCE = 0x0010
+	CMD_BID = 0x0526
 	CMD_PERIOD_DATA = 0x052d
 	CMD_INSTANT_TRANS = 0x0fc5
 	CMD_HIS_TRANS = 0x0fb5
@@ -32,6 +32,11 @@ const (
 	PERIOD_MINUTE = 0x0007
 )
 
+type Request interface {
+	GetSeqId() uint32
+	GetCmd() uint16
+}
+
 type Header struct {
 	Zip 	byte
 	SeqId 	uint32
@@ -41,34 +46,40 @@ type Header struct {
 	Cmd 	uint16
 }
 
+func (this Header) GetSeqId() uint32 {
+	return this.SeqId
+}
+
+func (this Header) GetCmd() uint16 {
+	return this.Cmd
+}
+
 type StockDef struct {
 	MarketLocation 	byte
 	StockCode string
 }
 
 type InfoExReq struct {
-	Header Header
+	Header
 	Count uint16
 	Stocks []*StockDef
 }
 
 type FinanceReq struct {
-	Header Header
+	Header
 	Count uint16
 	Stocks []*StockDef
 }
 
-type StockListReq struct {
-	Header Header
-	Block uint16
-	Unknown1 uint16
-	Offset uint16
+type BidReq struct {
+	Header
 	Count uint16
-	Unknown2 uint16
+	Stocks []*StockDef
+	Pad uint32
 }
 
 type InstantTransReq struct {
-	Header Header
+	Header
 	Location uint16
 	StockCode string
 	Offset uint16
@@ -76,7 +87,7 @@ type InstantTransReq struct {
 }
 
 type HisTransReq struct {
-	Header Header
+	Header
 	Date uint32
 	Location uint16
 	StockCode string
@@ -85,7 +96,7 @@ type HisTransReq struct {
 }
 
 type PeriodDataReq struct {
-	Header Header
+	Header
 	Location uint16
 	StockCode string
 	Period uint16
@@ -98,12 +109,12 @@ type PeriodDataReq struct {
 }
 
 type GetFileLenReq struct {
-	Header Header
+	Header
 	FileName string
 }
 
 type GetFileDataReq struct {
-	Header Header
+	Header
 	Offset uint32
 	Length uint32
 	FileName string
@@ -241,7 +252,7 @@ func NewFinanceReq(seqId uint32) *FinanceReq {
 			PacketType: 0x1,
 			Len: 0,
 			Len1: 0,
-			Cmd: CMD_XXX,
+			Cmd: CMD_FINANCE,
 		},
 		0,
 		[]*StockDef {},
@@ -249,34 +260,41 @@ func NewFinanceReq(seqId uint32) *FinanceReq {
 	return req
 }
 
-func (this *StockListReq) Write(writer *bytes.Buffer) {
+func (this *BidReq) Write(writer *bytes.Buffer) {
 	this.Header.Write(writer)
-	writeUInt16(writer, this.Block)
-	writeUInt16(writer, this.Unknown1)
-	writeUInt16(writer, this.Offset)
 	writeUInt16(writer, this.Count)
-	writeUInt16(writer, this.Unknown2)
+
+	for _, o := range this.Stocks {
+		o.Write(writer)
+		writeUInt32(writer, 0)
+	}
 }
 
-func (this *StockListReq) Size() int {
-	return 12
+func (this *BidReq) Size() int {
+	return 4 + 11 * len(this.Stocks)
 }
 
-func NewStockListReq(seqId uint32, block uint16, offset uint16, count uint16) *StockListReq {
-	req := &StockListReq{
-		Header{
+func (this *BidReq) AddCode(stockCode string) {
+	v := &StockDef{
+		MarketLocationFromCode(stockCode),
+		stockCode,
+	}
+
+	this.Stocks = append(this.Stocks, v)
+	this.Count = uint16(len(this.Stocks))
+	this.Header.SetLength(uint16(this.Size()))
+}
+
+func NewBidReq(seqId uint32) *BidReq {
+	req := &BidReq{
+		Header: Header{
 			Zip: 0xc,
 			SeqId: seqId,
 			PacketType: 0x1,
 			Len: 0,
 			Len1: 0,
-			Cmd: CMD_STOCK_LIST,
+			Cmd: CMD_BID,
 		},
-		block,
-		0,
-		offset,
-		count,
-		0,
 	}
 
 	req.Header.Len = uint16(req.Size())
