@@ -53,23 +53,7 @@ func tryGetInfoEx(host string) (error, map[string][]*network.InfoExItem) {
 	return getInfoEx(api)
 }
 
-func main() {
-	host := flag.String("host", HOST, "服务器地址")
-	filePath := flag.String("output", "./info_ex.json", "文件名")
-	flag.Parse()
-
-	var err error
-	var result map[string][]*network.InfoExItem
-	for {
-		err, result = tryGetInfoEx(*host)
-		if err != nil {
-			fmt.Println("try get info ex error", err)
-			time.Sleep(time.Second)
-			continue
-		}
-		break
-	}
-
+func saveFormat1(result map[string][]*network.InfoExItem, filePath string) {
 	finalResult := map[string]interface{}{}
 
 	for code, items := range result {
@@ -100,8 +84,60 @@ func main() {
 	}
 
 	bytes, _ := json.MarshalIndent(finalResult, "", "  ")
-	err = ioutil.WriteFile(*filePath, bytes, 0666)
+	err := ioutil.WriteFile(filePath, bytes, 0666)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func saveFormat2(result map[string][]*network.InfoExItem, filePath string) {
+	infoEx := map[string][]*network.InfoExItem{}
+
+	for code, items := range result {
+		var market string
+		switch code[:2] {
+		case "60":
+			market = "sh"
+		case "00":
+			fallthrough
+		case "30":
+			market = "sz"
+		default:
+			continue
+		}
+
+		infoEx[fmt.Sprintf("%s%s", market, code)] = items
+	}
+
+	bytes, _ := json.MarshalIndent(infoEx, "", "  ")
+	err := ioutil.WriteFile(filePath, bytes, 0666)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	host := flag.String("host", HOST, "服务器地址")
+	filePath := flag.String("output", "./info_ex.json", "文件名")
+	saveFormat := flag.Int("format", 1, "文件保存格式")
+	flag.Parse()
+
+	var err error
+	var result map[string][]*network.InfoExItem
+	for {
+		err, result = tryGetInfoEx(*host)
+		if err != nil {
+			fmt.Println("try get info ex error", err)
+			time.Sleep(time.Second)
+			continue
+		}
+		break
+	}
+
+	switch *saveFormat {
+	case 1:
+		saveFormat1(result, *filePath)
+	case 2:
+		saveFormat2(result, *filePath)
 	}
 }

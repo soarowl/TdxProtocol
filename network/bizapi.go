@@ -1,13 +1,30 @@
 package network
 
-import "fmt"
+import (
+	"fmt"
+	"errors"
+	"io/ioutil"
+	"path/filepath"
+	"os"
+	"time"
+	"github.com/stephenlyu/tds/datasource/tdx"
+	"github.com/stephenlyu/tds/util"
+	"github.com/stephenlyu/tds/date"
+)
+
+var blockExchangeMap = map[uint16]string{
+	0: "SZ",
+	1: "SH",
+}
 
 type BizApi struct {
 	api *API
+
+	workDir string
 }
 
 func CreateBizApi(host string) (error, *BizApi) {
-	result := &BizApi{}
+	result := &BizApi{workDir: "temp"}
 	err, api := CreateAPI(fmt.Sprintf("%s:7709", host))
 	if err != nil {
 		return err, nil
@@ -29,28 +46,37 @@ func (this *BizApi) SetTimeOut(timeout int) {
 	this.api.SetTimeOut(timeout)
 }
 
+func (this *BizApi) SetWorkDir(dir string) {
+	this.workDir = dir
+}
+
 func (this *BizApi) getStockCodesByBlock(block uint16) (error, []string) {
-	err, total, _ := this.api.GetStockList(block, 0, 1)
-	if err != nil {
-		return err, nil
+	exchange, ok := blockExchangeMap[block]
+	if !ok {
+		return nil, nil
 	}
 
-	result := make([]string, total)
-	count := 0
+	outputDir := filepath.Join(this.workDir, "T0002/hq_cache")
+	zhbFile := "zhb.zip"
 
-	for count < total {
-		err, _, bids := this.api.GetStockList(block, uint16(count), 80)
+	zhbFilePath := filepath.Join(outputDir, zhbFile)
+	stats, err := os.Stat(zhbFilePath)
+
+	today := date.GetTodayString()
+
+	if os.IsNotExist(err) || date.ToDayString(stats.ModTime()) < today {
+		err := this.DownloadFile(zhbFile, outputDir)
 		if err != nil {
 			return err, nil
 		}
-
-		for k, _ := range bids {
-			result[count] = k
-			count++
+		err = util.UnzipFile(zhbFilePath, outputDir)
+		if err != nil {
+			return err, nil
 		}
 	}
 
-	return nil, result
+	ds := tdxdatasource.NewDataSource(this.workDir, true)
+	return nil, ds.GetStockCodes(exchange)
 }
 
 func (this *BizApi) GetSZStockCodes() (error, []string) {
@@ -96,6 +122,29 @@ func (this *BizApi) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) 
 		}
 
 		for k, v := range infoEx {
+			result[k] = v
+		}
+	}
+
+	return nil, result
+}
+
+func (this *BizApi) GetFinance(codes []string) (error, map[string]*Finance) {
+	result := map[string]*Finance{}
+
+	n := 100
+	for i := 0; i < len(codes); i += n {
+		end := i + n
+		if end > len(codes) {
+			end = len(codes)
+		}
+		subCodes := codes[i:end]
+		err, finances := this.api.GetFinance(subCodes)
+		if err != nil {
+			return err, nil
+		}
+
+		for k, v := range finances {
 			result[k] = v
 		}
 	}
@@ -155,4 +204,47 @@ func (this *BizApi) GetLatestDayData(code string, count int) (error, []*Record) 
 	}
 
 	return nil, result
+}
+
+func (this *BizApi) DownloadFile(fileName string, outputDir string) error {
+	err, length := this.api.GetFileLength(fileName)
+	if err != nil {
+		return err
+	}
+
+	fileData := make([]byte, length)
+
+	var offset uint32 = 0
+	var count uint32 = 30000
+
+	var getPacket = func() (error error, packetLength uint32, data []byte) {
+		retryTimes := 0
+		for retryTimes < 3 {
+			err, packetLength, data = this.api.GetFileData(fileName, offset, count)
+			if err == nil {
+				return
+			}
+			time.Sleep(time.Millisecond * 500)
+			retryTimes++
+		}
+		return
+	}
+
+	for offset < length {
+		err, packetLength, data := getPacket()
+		if err != nil {
+			return err
+		}
+		if packetLength != uint32(len(data)) {
+			return errors.New("bad data")
+		}
+
+		copy(fileData[offset:offset + packetLength], data[:])
+
+		offset += count
+	}
+
+	filePath := filepath.Join(outputDir, fileName)
+	os.MkdirAll(filepath.Dir(filePath), 0777)
+	return ioutil.WriteFile(filePath, fileData, 0666)
 }

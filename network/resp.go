@@ -10,6 +10,10 @@ import (
 	"net"
 	"fmt"
 	"github.com/stephenlyu/TdxProtocol/util"
+	"github.com/z-ray/log"
+	"encoding/hex"
+	"reflect"
+	"strings"
 )
 
 const (
@@ -37,6 +41,49 @@ type InfoExItem struct {
 	DeliveredShares float32		`json:"delivered_shares"`
 	RationedSharePrice float32	`json:"rationed_share_price"`
 	RationedShares float32		`json:"rationed_shares"`
+}
+
+type Finance struct {
+	BShares float32				`json:"bShares"`
+	HShares float32				`json:"hShares"`
+	ProfitPerShare float32		`json:"profitPerShare"`
+	TotalAssets float32			`json:"totalAssets"`
+	CurrentAssets float32 		`json:"currentAssets"`
+	FixedAssets float32 		`json:"fixedAssets"`
+	IntangibleAssets float32 	`json:"intangibleAssets"`
+	ShareHolders float32 		`json:"shareHolders"`
+	CurrentLiability float32 	`json:"currentLiability"`
+	MinorShareRights float32 	`json:"minorShareRights"`
+	PublicReserveFunds float32 	`json:"publicReserveFunds"`
+	NetAssets float32 			`json:"netAssets"`
+	OperatingIncome float32 	`json:"operatingIncome"`
+	OperatingCost float32 		`json:"operatingCost"`
+	Receivables float32 		`json:"receivables"`
+	OperationProfit float32 	`json:"operatingProfit"`
+	InvestProfit float32 		`json:"investProfit"`
+	OperatingCash float32 		`json:"operatingCash"`
+	TotalCash float32 			`json:"totalCash"`
+	Inventory float32 			`json:"inventory"`
+	TotalProfit float32 		`json:"totalProfit"`
+	NOPAT float32 				`json:"nopat"`				// 税后利润
+	NetProfit float32 			`json:"netProfit"`
+	UndistributedProfit float32 `json:"undistributedProfit"`
+	NetAdjustedAssets float32 	`json:"netAdjustedAssets"`		// 调整后净资
+}
+
+func (this *Finance) String() string {
+	value := reflect.ValueOf(this).Elem()
+	t := reflect.TypeOf(this).Elem()
+	lines := make([]string, t.NumField() + 2)
+	lines[0] = "{"
+	lines[len(lines) - 1] = "}"
+	for i := 0; i < value.NumField(); i++ {
+		f := value.Field(i)
+		v := f.Float()
+		name := t.Field(i).Name
+		lines[i+1] = fmt.Sprintf("%20s: %.02f", name, v)
+	}
+	return strings.Join(lines, "\n")
 }
 
 type Bid struct {
@@ -108,15 +155,30 @@ type InfoExParser struct {
 	Req *InfoExReq
 }
 
-type StockListParser struct {
+type FinanceParser struct {
 	RespParser
-	Req *StockListReq
+	Req *FinanceReq
+}
+
+type BidParser struct {
+	RespParser
+	Req Request
 	Total uint16
 }
 
 type PeriodDataParser struct {
 	RespParser
 	Req *PeriodDataReq
+}
+
+type GetFileLenParser struct {
+	RespParser
+	Req *GetFileLenReq
+}
+
+type GetFileDataParser struct {
+	RespParser
+	Req *GetFileDataReq
 }
 
 func (this *Record) MinuteString() string {
@@ -254,6 +316,81 @@ func (this *RespParser) Parse() {
 		panic(errors.New("incomplete data"))
 	}
 	this.uncompressIf()
+}
+
+func (this *RespParser) tryParseData() (err error, v int) {
+	err = nil
+	defer func() {
+		if err1 := recover(); err1 != nil {
+			err = err1.(error)
+		}
+	}()
+
+	v = this.parseData()
+	return
+}
+
+func (this *RespParser) tryParseData2() (err error, v int) {
+	err = nil
+	defer func() {
+		if err1 := recover(); err1 != nil {
+			err = err1.(error)
+		}
+	}()
+
+	v = this.parseData2()
+	return
+}
+
+func (this *RespParser) TryParse() {
+	this.Current = 0
+
+	var f float32
+	var i16 uint16
+	var i32 uint32
+	var iData int
+
+	var err error
+
+	for i := 0; i < len(this.Data) - 2; i++ {
+		end := i+4
+		if end > len(this.Data) {
+			end = len(this.Data)
+		}
+		fmt.Printf("%4d. %v\t", i, hex.EncodeToString(this.Data[i:end]))
+		if i < len(this.Data) - 4 {
+			f = this.getFloat32()
+			fmt.Printf("\t%50.2f", f)
+			this.Current -= 4
+			i16 = this.getUint16()
+			fmt.Printf("\t%6d", i16)
+			this.Current -= 2
+			i32 = this.getUint32()
+			fmt.Printf("\t%10d", i32)
+			this.Current -= 4
+		}
+
+		current := this.Current
+		err, iData = this.tryParseData()
+		if err != nil {
+			fmt.Print("\tNaN")
+		} else {
+			fmt.Printf("\t%10d", iData)
+		}
+		this.Current = current
+
+		err, iData = this.tryParseData2()
+		if err != nil {
+			fmt.Print("\tNaN")
+		} else {
+			fmt.Printf("\t%10d", iData)
+		}
+		this.Current = current
+
+		fmt.Printf("\n")
+
+		this.Current++
+	}
 }
 
 func (this *InstantTransParser) Parse() (error, []*Transaction) {
@@ -422,7 +559,81 @@ func NewInfoExParser(req *InfoExReq, data []byte) *InfoExParser {
 	}
 }
 
-func (this *StockListParser) isStockValid(s []byte) bool {
+func NewFinanceParser(req *FinanceReq, data []byte) *FinanceParser {
+	return &FinanceParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
+}
+
+func (this *FinanceParser) Parse() (err error, finances map[string]*Finance) {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		err = errors.New("incomplete data")
+		return
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		err = errors.New("bad seq id")
+		return
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		err = errors.New("bad cmd")
+		return
+	}
+
+	this.uncompressIf()
+
+	finances = make(map[string]*Finance)
+
+	count := this.getUint16()
+
+	for ; count > 0; count-- {
+		this.skipByte(1)
+		stockCode := string(this.Data[this.Current:this.Current + STOCK_CODE_LEN])
+		this.skipByte(STOCK_CODE_LEN)
+
+		finance := new(Finance)
+
+		this.skipByte(41 - (3 + STOCK_CODE_LEN))
+
+		finance.BShares = this.getFloat32()                // 41
+		finance.HShares = this.getFloat32()                // 45
+		finance.ProfitPerShare = this.getFloat32()        // 49
+		finance.TotalAssets = this.getFloat32()            // 53
+		finance.CurrentAssets = this.getFloat32()        // 57
+		finance.FixedAssets = this.getFloat32()            // 61
+		finance.IntangibleAssets = this.getFloat32()    // 65
+		finance.ShareHolders = this.getFloat32()        // 69
+		finance.CurrentLiability = this.getFloat32()    // 73
+		finance.MinorShareRights = this.getFloat32()    // 77
+		finance.PublicReserveFunds = this.getFloat32()    // 81
+		finance.NetAssets = this.getFloat32()            // 85
+		finance.OperatingIncome = this.getFloat32()        // 89
+		finance.OperatingCost = this.getFloat32()        // 93
+		finance.Receivables = this.getFloat32()            // 97
+		finance.OperationProfit = this.getFloat32()        // 101
+		finance.InvestProfit = this.getFloat32()        // 105
+		finance.OperatingCash = this.getFloat32()        // 109
+		finance.TotalCash = this.getFloat32()            // 113
+		finance.Inventory = this.getFloat32()            // 117
+		finance.TotalProfit = this.getFloat32()            // 121
+		finance.NOPAT = this.getFloat32()                // 125
+		finance.NetProfit = this.getFloat32()            // 129
+		finance.UndistributedProfit = this.getFloat32()    // 133
+		finance.NetAdjustedAssets = this.getFloat32()    // 137
+
+		this.skipByte(4)
+
+		finances[stockCode] = finance
+	}
+
+	return
+}
+
+func (this *BidParser) isStockValid(s []byte) bool {
 	if len(s) < STOCK_CODE_LEN {
 		return false
 	}
@@ -435,7 +646,7 @@ func (this *StockListParser) isStockValid(s []byte) bool {
 	return true
 }
 
-func (this *StockListParser) searchStockCode() int {
+func (this *BidParser) searchStockCode() int {
 	for i := this.Current; i < len(this.Data); i++ {
 		if this.isStockValid(this.Data[i:]) {
 			return i - this.Current - 1
@@ -444,24 +655,30 @@ func (this *StockListParser) searchStockCode() int {
 	panic(errors.New("no stock code found"))
 }
 
-func (this *StockListParser) Parse() (error, map[string]*Bid) {
+func (this *BidParser) decrypt() {
+	for i, b := range this.Data {
+		this.Data[i] = b ^ 57
+	}
+}
+
+func (this *BidParser) Parse() (error, map[string]*Bid) {
 	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
 		return errors.New("incomplete data"), nil
 	}
 
-	if this.getSeqId() != this.Req.Header.SeqId {
+	if this.getSeqId() != this.Req.GetSeqId() {
 		return errors.New("bad seq id"), nil
 	}
 
-	if this.getCmd() != this.Req.Header.Cmd {
+	if this.getCmd() != this.Req.GetCmd() {
 		return errors.New("bad cmd"), nil
 	}
 
 	this.uncompressIf()
+	this.decrypt()
 
 	result := map[string]*Bid{}
 
-	totalCount := this.getUint16()
 	count := this.getUint16()
 
 	for ; count > 0; count-- {
@@ -480,6 +697,8 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 
 		this.parseData()
 		this.parseData()
+		this.parseData()
+		this.parseData()
 
 		bid.Vol = uint32(this.parseData2())
 		this.parseData2()
@@ -487,8 +706,8 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 		bid.InnerVol = uint32(this.parseData2())
 		bid.OuterVol = uint32(this.parseData2())
 
-		this.parseData()
 		this.skipByte(1)
+		this.parseData()
 
 		bid.BuyPrice1 = uint32(this.parseData() + int(bid.Close))
 		bid.SellPrice1 = uint32(this.parseData() + int(bid.Close))
@@ -522,8 +741,16 @@ func (this *StockListParser) Parse() (error, map[string]*Bid) {
 			this.skipByte(n)
 		}
 	}
-	this.Total = totalCount
 	return nil, result
+}
+
+func NewStockListParser(req Request, data []byte) *BidParser {
+	return &BidParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
 }
 
 func NewPeriodDataParser(req *PeriodDataReq, data []byte) *PeriodDataParser {
@@ -581,13 +808,69 @@ func (this *PeriodDataParser) Parse() (error, []*Record) {
 	return nil, result
 }
 
-func NewStockListParser(req *StockListReq, data []byte) *StockListParser {
-	return &StockListParser{
+func NewGetFileLenParser(req *GetFileLenReq, data []byte) *GetFileLenParser {
+	return &GetFileLenParser{
 		RespParser: RespParser{
 			RawBuffer: data,
 		},
 		Req: req,
 	}
+}
+
+func (this *GetFileLenParser) Parse() (err error, length uint32) {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		err = errors.New("incomplete data")
+		return
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		err = errors.New("bad seq id")
+		return
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		err = errors.New("bad cmd")
+		return
+	}
+
+	this.uncompressIf()
+
+	length = this.getUint32()
+
+	return
+}
+
+func NewGetFileDataParser(req *GetFileDataReq, data []byte) *GetFileDataParser {
+	return &GetFileDataParser{
+		RespParser: RespParser{
+			RawBuffer: data,
+		},
+		Req: req,
+	}
+}
+
+func (this *GetFileDataParser) Parse() (err error, length uint32, data []byte) {
+	if int(this.getLen()) + this.getHeaderLen() > len(this.RawBuffer) {
+		err = errors.New("incomplete data")
+		return
+	}
+
+	if this.getSeqId() != this.Req.Header.SeqId {
+		err = errors.New("bad seq id")
+		return
+	}
+
+	if this.getCmd() != this.Req.Header.Cmd {
+		err = errors.New("bad cmd")
+		return
+	}
+
+	this.uncompressIf()
+
+	length = binary.LittleEndian.Uint32(this.Data[:4])
+	data = this.Data[4:]
+
+	return
 }
 
 func NewRespParser(data []byte) *RespParser {
@@ -600,7 +883,10 @@ func ReadResp(conn net.Conn) (error, []byte) {
 	for nRead < RESP_HEADER_LEN {
 		n, err := conn.Read(header[nRead:])
 		if err != nil {
+			log.Errorf("ReadResp - read header fail, error: %v", err)
 			return err, nil
+		} else {
+			log.Infof("ReadResp - read header success, n: %d", n)
 		}
 		nRead += n
 	}
@@ -612,10 +898,27 @@ func ReadResp(conn net.Conn) (error, []byte) {
 	for nRead < length {
 		n, err := conn.Read(result[nRead:])
 		if err != nil {
+			log.Errorf("ReadResp - read data fail, error: %v", err)
 			return err, nil
 		}
 		nRead += n
 	}
 
 	return nil, result
+}
+
+func ReadRespN(conn net.Conn, buffer []byte) (error, []byte) {
+	var nRead int
+
+	for nRead < len(buffer) {
+		n, err := conn.Read(buffer[nRead:])
+		fmt.Printf("read: %d\n", n)
+		if err != nil {
+			return err, nil
+		}
+		nRead += n
+		fmt.Printf("nRead:", nRead)
+	}
+
+	return nil, buffer[:nRead]
 }

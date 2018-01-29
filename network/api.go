@@ -96,22 +96,6 @@ func (this *API) sendReq(data []byte) (error, []byte) {
 	return err, respData
 }
 
-func (this *API) GetStockList(block uint16, offset uint16, count uint16) (error, int, map[string]*Bid) {
-	req := NewStockListReq(this.nextSeqId(), block, offset, count)
-	buf := new(bytes.Buffer)
-	req.Write(buf)
-
-	err, respData := this.sendReq(buf.Bytes())
-	if err != nil {
-		return err, 0, nil
-	}
-
-	parser := NewStockListParser(req, respData)
-	err, result := parser.Parse()
-
-	return err, int(parser.Total), result
-}
-
 func (this *API) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
 	req := NewInfoExReq(this.nextSeqId())
 	for _, code := range codes {
@@ -129,6 +113,23 @@ func (this *API) GetInfoEx(codes []string) (error, map[string][]*InfoExItem) {
 	return parser.Parse()
 }
 
+func (this *API) GetFinance(codes []string) (error, map[string]*Finance) {
+	req := NewFinanceReq(this.nextSeqId())
+	for _, code := range codes {
+		req.AddCode(code)
+	}
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+
+	err, respData := this.sendReq(buf.Bytes())
+	if err != nil {
+		return err, nil
+	}
+
+	parser := NewFinanceParser(req, respData)
+	return parser.Parse()
+}
+
 func (this *API) GetPeriodData(code string, period, offset, count uint16) (error, []*Record) {
 	req := NewPeriodDataReq(this.nextSeqId(), code, period, offset, count)
 	buf := new(bytes.Buffer)
@@ -140,6 +141,34 @@ func (this *API) GetPeriodData(code string, period, offset, count uint16) (error
 	}
 
 	parser := NewPeriodDataParser(req, respData)
+	return parser.Parse()
+}
+
+func (this *API) GetFileLength(fileName string) (error, uint32) {
+	req := NewGetFileLenReq(this.nextSeqId(), fileName)
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+
+	err, respData := this.sendReq(buf.Bytes())
+	if err != nil {
+		return err, 0
+	}
+
+	parser := NewGetFileLenParser(req, respData)
+	return parser.Parse()
+}
+
+func (this *API) GetFileData(fileName string, offset uint32, length uint32) (error, uint32, []byte) {
+	req := NewGetFileDataReq(this.nextSeqId(), fileName, offset, length)
+	buf := new(bytes.Buffer)
+	req.Write(buf)
+
+	err, respData := this.sendReq(buf.Bytes())
+	if err != nil {
+		return err, 0, nil
+	}
+
+	parser := NewGetFileDataParser(req, respData)
 	return parser.Parse()
 }
 
